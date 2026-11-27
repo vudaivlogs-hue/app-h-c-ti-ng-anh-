@@ -1,0 +1,25 @@
+# Build & Gradle
+.gradle/
+.kotlin/
+build/
+/build
+/app/build
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Keystore & Local Secrets (KHÔNG commit lên Git)
+*.jks
+*.keystore
+keystore.properties
+local.properties
+/local.properties
+
+# IDE & OS
+/.idea/
+*.iml
+.DS_Store
+/captures
+.externalNativeBuild
+.cxx

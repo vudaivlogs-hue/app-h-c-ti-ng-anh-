@@ -1,0 +1,24 @@
+package com.enziidict.app.data.local.entity
+
+import androidx.room.ColumnInfo
+import androidx.room.Entity
+import androidx.room.Index
+import androidx.room.PrimaryKey
+
+@Entity(
+    tableName = "word_folders",
+    indices = [
+        Index(name = "idx_word_folders_name_unique", value = ["name"], unique = true)
+    ]
+)
+data class WordFolder(
+    @PrimaryKey(autoGenerate = true)
+    val id: Long = 0,
+    val name: String,
+    @ColumnInfo(name = "icon_name")
+    val iconName: String,
+    @ColumnInfo(name = "color_hex")
+    val colorHex: String,
+    @ColumnInfo(name = "created_at")
+    val createdAt: Long
+)

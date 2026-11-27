@@ -1,0 +1,652 @@
+[
+  {
+    "word": "apple",
+    "ipa_uk": "/ˈæp.əl/",
+    "ipa_us": "/ˈæp.əl/",
+    "pos": "noun",
+    "meaning_vi": "quả táo; cây táo",
+    "examples": [
+      { "en": "An apple a day keeps the doctor away.", "vi": "Mỗi ngày ăn một quả táo giúp bạn khỏe mạnh, không cần gặp bác sĩ." },
+      { "en": "She sliced a crisp green apple for breakfast.", "vi": "Cô ấy thái một quả táo xanh giòn cho bữa sáng." }
+    ],
+    "synonyms": ["fruit", "pome"],
+    "collocations": [
+      { "phrase": "the apple of someone's eye", "meaning_vi": "người được yêu quý nhất", "example": "His granddaughter is the apple of his eye." },
+      { "phrase": "apple pie", "meaning_vi": "bánh táo nướng", "example": "We baked a warm apple pie on Sunday." }
+    ],
+    "cefr_level": "A1",
+    "frequency_rank": 120
+  },
+  {
+    "word": "approach",
+    "ipa_uk": "/əˈprəʊtʃ/",
+    "ipa_us": "/əˈproʊtʃ/",
+    "pos": "verb",
+    "meaning_vi": "tiếp cận, lại gần; xử lý (một vấn đề)",
+    "examples": [
+      { "en": "Winter is approaching quickly.", "vi": "Mùa đông đang đến rất nhanh." },
+      { "en": "We need to approach this problem from a new angle.", "vi": "Chúng ta cần tiếp cận vấn đề này từ một góc độ mới." }
+    ],
+    "synonyms": ["near", "advance", "tackle"],
+    "collocations": [
+      { "phrase": "approach a problem", "meaning_vi": "tiếp cận giải quyết vấn đề", "example": "Experienced engineers approach a problem systematically." }
+    ],
+    "cefr_level": "B1",
+    "frequency_rank": 350
+  },
+  {
+    "word": "approach",
+    "ipa_uk": "/əˈprəʊtʃ/",
+    "ipa_us": "/əˈproʊtʃ/",
+    "pos": "noun",
+    "meaning_vi": "phương pháp tiếp cận, cách làm; sự lại gần",
+    "examples": [
+      { "en": "Her communicative approach helps students speak confidently.", "vi": "Phương pháp tiếp cận giao tiếp của cô ấy giúp học sinh nói tự tin." }
+    ],
+    "synonyms": ["method", "strategy", "technique"],
+    "collocations": [
+      { "phrase": "practical approach", "meaning_vi": "cách tiếp cận thực tế", "example": "Let us take a practical approach to learning English." }
+    ],
+    "cefr_level": "B1",
+    "frequency_rank": 360
+  },
+  {
+    "word": "application",
+    "ipa_uk": "/ˌæp.lɪˈkeɪ.ʃən/",
+    "ipa_us": "/ˌæp.ləˈkeɪ.ʃən/",
+    "pos": "noun",
+    "meaning_vi": "ứng dụng; đơn xin việc, hồ sơ đăng ký",
+    "examples": [
+      { "en": "Please submit your job application before Friday.", "vi": "Vui lòng nộp đơn xin việc trước thứ Sáu." },
+      { "en": "This mobile application works completely offline.", "vi": "Ứng dụng di động này hoạt động hoàn toàn ngoại tuyến." }
+    ],
+    "synonyms": ["app", "request", "program"],
+    "collocations": [
+      { "phrase": "submit an application", "meaning_vi": "nộp đơn đăng ký", "example": "Over two hundred candidates submitted an application." },
+      { "phrase": "practical application", "meaning_vi": "ứng dụng thực tiễn", "example": "Vocabulary has immediate practical application in daily talk." }
+    ],
+    "cefr_level": "B1",
+    "frequency_rank": 410
+  },
+  {
+    "word": "articulate",
+    "ipa_uk": "/ɑːˈtɪk.jə.lət/",
+    "ipa_us": "/ɑːrˈtɪk.jə.lət/",
+    "pos": "adjective",
+    "meaning_vi": "nói năng lưu loát, diễn đạt rõ ràng, mạch lạc",
+    "examples": [
+      { "en": "She is an articulate speaker who explains complex ideas clearly.", "vi": "Cô ấy là một diễn giả lưu loát, giải thích các ý tưởng phức tạp rất rõ ràng." }
+    ],
+    "synonyms": ["eloquent", "fluent", "coherent"],
+    "collocations": [
+      { "phrase": "highly articulate", "meaning_vi": "diễn đạt cực kỳ mạch lạc", "example": "The interviewee was highly articulate under pressure." }
+    ],
+    "cefr_level": "C1",
+    "frequency_rank": 2200
+  },
+  {
+    "word": "bilingual",
+    "ipa_uk": "/baɪˈlɪŋ.ɡwəl/",
+    "ipa_us": "/baɪˈlɪŋ.ɡwəl/",
+    "pos": "adjective",
+    "meaning_vi": "song ngữ (nói hoặc viết thành thạo hai ngôn ngữ)",
+    "examples": [
+      { "en": "Reading bilingual articles builds vocabulary naturally.", "vi": "Đọc các bài báo song ngữ giúp xây dựng vốn từ vựng một cách tự nhiên." }
+    ],
+    "synonyms": ["dual-language"],
+    "collocations": [
+      { "phrase": "bilingual dictionary", "meaning_vi": "từ điển song ngữ", "example": "A fast bilingual dictionary is essential for learners." }
+    ],
+    "cefr_level": "B2",
+    "frequency_rank": 1850
+  },
+  {
+    "word": "breakthrough",
+    "ipa_uk": "/ˈbreɪk.θruː/",
+    "ipa_us": "/ˈbreɪk.θruː/",
+    "pos": "noun",
+    "meaning_vi": "bước đột phá, phát hiện mang tính bước ngoặt",
+    "examples": [
+      { "en": "Consistent speaking practice led to a breakthrough in her fluency.", "vi": "Việc luyện nói đều đặn đã tạo ra bước đột phá trong sự trôi chảy của cô ấy." }
+    ],
+    "synonyms": ["advance", "discovery", "leap"],
+    "collocations": [
+      { "phrase": "make a breakthrough", "meaning_vi": "tạo nên bước đột phá", "example": "Researchers hope to make a breakthrough soon." }
+    ],
+    "cefr_level": "B2",
+    "frequency_rank": 1400
+  },
+  {
+    "word": "clarify",
+    "ipa_uk": "/ˈklær.ɪ.faɪ/",
+    "ipa_us": "/ˈkler.ə.faɪ/",
+    "pos": "verb",
+    "meaning_vi": "làm rõ, giải thích cho dễ hiểu",
+    "examples": [
+      { "en": "Could you clarify what you meant by that phrase?", "vi": "Bạn có thể làm rõ ý bạn muốn nói qua cụm từ đó không?" }
+    ],
+    "synonyms": ["explain", "illuminate", "clear up"],
+    "collocations": [
+      { "phrase": "clarify a point", "meaning_vi": "làm rõ một luận điểm", "example": "Let me clarify a point from earlier." }
+    ],
+    "cefr_level": "B2",
+    "frequency_rank": 980
+  },
+  {
+    "word": "collocation",
+    "ipa_uk": "/ˌkɒl.əˈkeɪ.ʃən/",
+    "ipa_us": "/ˌkɑː.ləˈkeɪ.ʃən/",
+    "pos": "noun",
+    "meaning_vi": "cụm từ cố định (các từ thường đi cùng nhau tự nhiên)",
+    "examples": [
+      { "en": "Learning collocations makes your English sound natural.", "vi": "Học các cụm từ cố định giúp tiếng Anh của bạn nghe tự nhiên hơn." }
+    ],
+    "synonyms": ["word combination", "fixed phrase"],
+    "collocations": [
+      { "phrase": "strong collocation", "meaning_vi": "cụm kết hợp từ chặt chẽ", "example": "'Make a decision' is a strong collocation in English." }
+    ],
+    "cefr_level": "B2",
+    "frequency_rank": 2900
+  },
+  {
+    "word": "confident",
+    "ipa_uk": "/ˈkɒn.fɪ.dənt/",
+    "ipa_us": "/ˈkɑːn.fə.dənt/",
+    "pos": "adjective",
+    "meaning_vi": "tự tin, tin chắc",
+    "examples": [
+      { "en": "He feels much more confident speaking English with foreigners now.", "vi": "Bây giờ anh ấy cảm thấy tự tin hơn nhiều khi nói tiếng Anh với người nước ngoài." }
+    ],
+    "synonyms": ["assured", "self-reliant", "certain"],
+    "collocations": [
+      { "phrase": "feel confident about", "meaning_vi": "cảm thấy tự tin về", "example": "I feel confident about tomorrow's interview." }
+    ],
+    "cefr_level": "B1",
+    "frequency_rank": 620
+  },
+  {
+    "word": "consistent",
+    "ipa_uk": "/kənˈsɪs.tənt/",
+    "ipa_us": "/kənˈsɪs.tənt/",
+    "pos": "adjective",
+    "meaning_vi": "kiên định, nhất quán, đều đặn",
+    "examples": [
+      { "en": "Consistent daily review beats cramming before an exam.", "vi": "Ôn tập đều đặn hằng ngày hiệu quả hơn hẳn việc học nhồi trước kỳ thi." }
+    ],
+    "synonyms": ["steady", "regular", "coherent"],
+    "collocations": [
+      { "phrase": "consistent effort", "meaning_vi": "nỗ lực bền bỉ đều đặn", "example": "Fluency comes from consistent effort." }
+    ],
+    "cefr_level": "B2",
+    "frequency_rank": 890
+  },
+  {
+    "word": "context",
+    "ipa_uk": "/ˈkɒn.tekst/",
+    "ipa_us": "/ˈkɑːn.tekst/",
+    "pos": "noun",
+    "meaning_vi": "ngữ cảnh, bối cảnh",
+    "examples": [
+      { "en": "Try to guess the meaning of unfamiliar words from context.", "vi": "Hãy thử đoán nghĩa của từ lạ dựa vào ngữ cảnh." }
+    ],
+    "synonyms": ["background", "setting", "situation"],
+    "collocations": [
+      { "phrase": "out of context", "meaning_vi": "tách khỏi ngữ cảnh", "example": "His remark was quoted out of context." },
+      { "phrase": "in this context", "meaning_vi": "trong bối cảnh này", "example": "In this context, 'charge' means a fee." }
+    ],
+    "cefr_level": "B1",
+    "frequency_rank": 540
+  },
+  {
+    "word": "decision",
+    "ipa_uk": "/dɪˈsɪʒ.ən/",
+    "ipa_us": "/dɪˈsɪʒ.ən/",
+    "pos": "noun",
+    "meaning_vi": "quyết định, sự lựa chọn",
+    "examples": [
+      { "en": "She made a difficult decision to move abroad for work.", "vi": "Cô ấy đã đưa ra một quyết định khó khăn là chuyển ra nước ngoài làm việc." }
+    ],
+    "synonyms": ["choice", "resolution", "verdict"],
+    "collocations": [
+      { "phrase": "make a decision", "meaning_vi": "đưa ra quyết định", "example": "We need to make a decision by Friday." },
+      { "phrase": "reach a decision", "meaning_vi": "đi đến quyết định", "example": "After two hours, the team reached a decision." }
+    ],
+    "cefr_level": "A2",
+    "frequency_rank": 290
+  },
+  {
+    "word": "efficient",
+    "ipa_uk": "/ɪˈfɪʃ.ənt/",
+    "ipa_us": "/ɪˈfɪʃ.ənt/",
+    "pos": "adjective",
+    "meaning_vi": "hiệu quả, năng suất cao (ít lãng phí thời gian/công sức)",
+    "examples": [
+      { "en": "Spaced repetition is an efficient way to memorize vocabulary.", "vi": "Lặp lại ngắt quãng là một cách hiệu quả để ghi nhớ từ vựng." }
+    ],
+    "synonyms": ["effective", "productive", "streamlined"],
+    "collocations": [
+      { "phrase": "time-efficient", "meaning_vi": "tiết kiệm thời gian", "example": "Quick lookup is a time-efficient study habit." }
+    ],
+    "cefr_level": "B1",
+    "frequency_rank": 740
+  },
+  {
+    "word": "emphasize",
+    "ipa_uk": "/ˈem.fə.saɪz/",
+    "ipa_us": "/ˈem.fə.saɪz/",
+    "pos": "verb",
+    "meaning_vi": "nhấn mạnh, làm nổi bật",
+    "examples": [
+      { "en": "The teacher emphasized the importance of word stress.", "vi": "Giáo viên đã nhấn mạnh tầm quan trọng của trọng âm từ." }
+    ],
+    "synonyms": ["highlight", "stress", "underline"],
+    "collocations": [
+      { "phrase": "strongly emphasize", "meaning_vi": "nhấn mạnh mạnh mẽ", "example": "I want to strongly emphasize daily listening." }
+    ],
+    "cefr_level": "B1",
+    "frequency_rank": 860
+  },
+  {
+    "word": "fluent",
+    "ipa_uk": "/ˈfluː.ənt/",
+    "ipa_us": "/ˈfluː.ənt/",
+    "pos": "adjective",
+    "meaning_vi": "trôi chảy, lưu loát",
+    "examples": [
+      { "en": "After six months of shadowing, he became fluent in English.", "vi": "Sau sáu tháng luyện nói nhại, anh ấy đã nói tiếng Anh trôi chảy." }
+    ],
+    "synonyms": ["articulate", "smooth", "proficient"],
+    "collocations": [
+      { "phrase": "fluent in English", "meaning_vi": "nói tiếng Anh trôi chảy", "example": "She is fluent in both English and Vietnamese." }
+    ],
+    "cefr_level": "B1",
+    "frequency_rank": 1150
+  },
+  {
+    "word": "grammar",
+    "ipa_uk": "/ˈɡræm.ər/",
+    "ipa_us": "/ˈɡræm.ɚ/",
+    "pos": "noun",
+    "meaning_vi": "ngữ pháp",
+    "examples": [
+      { "en": "Understanding grammar patterns helps you build accurate sentences.", "vi": "Hiểu các mẫu ngữ pháp giúp bạn đặt câu chính xác." }
+    ],
+    "synonyms": ["syntax", "structure"],
+    "collocations": [
+      { "phrase": "grammar breakdown", "meaning_vi": "phân tích cấu trúc ngữ pháp", "example": "Check the grammar breakdown to see why past perfect is used." }
+    ],
+    "cefr_level": "A2",
+    "frequency_rank": 950
+  },
+  {
+    "word": "hesitate",
+    "ipa_uk": "/ˈhez.ɪ.teɪt/",
+    "ipa_us": "/ˈhez.ə.teɪt/",
+    "pos": "verb",
+    "meaning_vi": "do dự, ngập ngừng",
+    "examples": [
+      { "en": "Don't hesitate to ask if anything is unclear.", "vi": "Đừng ngần ngại hỏi nếu có điều gì chưa rõ." }
+    ],
+    "synonyms": ["pause", "waver", "falter"],
+    "collocations": [
+      { "phrase": "do not hesitate to", "meaning_vi": "đừng ngần ngại làm gì", "example": "Please do not hesitate to contact me." }
+    ],
+    "cefr_level": "B1",
+    "frequency_rank": 1020
+  },
+  {
+    "word": "idiom",
+    "ipa_uk": "/ˈɪd.i.əm/",
+    "ipa_us": "/ˈɪd.i.əm/",
+    "pos": "noun",
+    "meaning_vi": "thành ngữ",
+    "examples": [
+      { "en": "'Break a leg' is a common English idiom meaning good luck.", "vi": "'Break a leg' là một thành ngữ tiếng Anh phổ biến mang nghĩa chúc may mắn." }
+    ],
+    "synonyms": ["expression", "saying", "phrase"],
+    "collocations": [
+      { "phrase": "everyday idiom", "meaning_vi": "thành ngữ giao tiếp hằng ngày", "example": "Movies are full of everyday idioms." }
+    ],
+    "cefr_level": "B1",
+    "frequency_rank": 2100
+  },
+  {
+    "word": "implement",
+    "ipa_uk": "/ˈɪm.plɪ.ment/",
+    "ipa_us": "/ˈɪm.plə.ment/",
+    "pos": "verb",
+    "meaning_vi": "triển khai, thực thi, áp dụng vào thực tế",
+    "examples": [
+      { "en": "The team will implement the new spaced-repetition schedule tomorrow.", "vi": "Nhóm sẽ triển khai lịch ôn tập ngắt quãng mới vào ngày mai." }
+    ],
+    "synonyms": ["execute", "apply", "carry out"],
+    "collocations": [
+      { "phrase": "implement a plan", "meaning_vi": "triển khai kế hoạch", "example": "It takes discipline to implement a study plan." }
+    ],
+    "cefr_level": "B2",
+    "frequency_rank": 780
+  },
+  {
+    "word": "improve",
+    "ipa_uk": "/ɪmˈpruːv/",
+    "ipa_us": "/ɪmˈpruːv/",
+    "pos": "verb",
+    "meaning_vi": "cải thiện, nâng cao, tiến bộ",
+    "examples": [
+      { "en": "Listening to podcasts every morning improved my comprehension.", "vi": "Nghe podcast mỗi sáng đã cải thiện khả năng nghe hiểu của tôi." }
+    ],
+    "synonyms": ["enhance", "boost", "progress"],
+    "collocations": [
+      { "phrase": "improve pronunciation", "meaning_vi": "cải thiện phát âm", "example": "Recording yourself is a great way to improve pronunciation." }
+    ],
+    "cefr_level": "A2",
+    "frequency_rank": 240
+  },
+  {
+    "word": "interview",
+    "ipa_uk": "/ˈɪn.tə.vjuː/",
+    "ipa_us": "/ˈɪn.t̬ɚ.vjuː/",
+    "pos": "noun",
+    "meaning_vi": "cuộc phỏng vấn",
+    "examples": [
+      { "en": "She practiced mock questions before her technical interview.", "vi": "Cô ấy đã luyện các câu hỏi mô phỏng trước buổi phỏng vấn chuyên môn." }
+    ],
+    "synonyms": ["meeting", "evaluation"],
+    "collocations": [
+      { "phrase": "job interview", "meaning_vi": "phỏng vấn xin việc", "example": "Speak clearly and concisely during a job interview." }
+    ],
+    "cefr_level": "A2",
+    "frequency_rank": 460
+  },
+  {
+    "word": "itinerary",
+    "ipa_uk": "/aɪˈtɪn.ər.ər.i/",
+    "ipa_us": "/aɪˈtɪn.ə.rer.i/",
+    "pos": "noun",
+    "meaning_vi": "lịch trình chuyến đi, hành trình chi tiết",
+    "examples": [
+      { "en": "Our five-day Da Nang itinerary includes Hoi An and Ba Na Hills.", "vi": "Lịch trình năm ngày ở Đà Nẵng của chúng tôi gồm Hội An và Bà Nà Hills." }
+    ],
+    "synonyms": ["schedule", "route", "travel plan"],
+    "collocations": [
+      { "phrase": "plan an itinerary", "meaning_vi": "lên lịch trình du lịch", "example": "Let's plan an itinerary before booking tickets." }
+    ],
+    "cefr_level": "C1",
+    "frequency_rank": 3400
+  },
+  {
+    "word": "make",
+    "ipa_uk": "/meɪk/",
+    "ipa_us": "/meɪk/",
+    "pos": "verb",
+    "meaning_vi": "làm, tạo ra; khiến cho",
+    "examples": [
+      { "en": "Everyone makes mistakes when learning a new language.", "vi": "Ai cũng mắc lỗi khi học một ngôn ngữ mới." }
+    ],
+    "synonyms": ["create", "produce", "form"],
+    "collocations": [
+      { "phrase": "make progress", "meaning_vi": "tiến bộ", "example": "You are making steady progress every week." },
+      { "phrase": "make a mistake", "meaning_vi": "mắc lỗi", "example": "Don't be afraid to make a mistake while speaking." }
+    ],
+    "cefr_level": "A1",
+    "frequency_rank": 45
+  },
+  {
+    "word": "memorize",
+    "ipa_uk": "/ˈmem.ə.raɪz/",
+    "ipa_us": "/ˈmem.ə.raɪz/",
+    "pos": "verb",
+    "meaning_vi": "ghi nhớ, học thuộc lòng",
+    "examples": [
+      { "en": "Flashcards help you memorize new words faster.", "vi": "Thẻ ghi nhớ giúp bạn thuộc từ mới nhanh hơn." }
+    ],
+    "synonyms": ["remember", "retain", "learn by heart"],
+    "collocations": [
+      { "phrase": "memorize vocabulary", "meaning_vi": "ghi nhớ từ vựng", "example": "Use example sentences to memorize vocabulary effectively." }
+    ],
+    "cefr_level": "B1",
+    "frequency_rank": 1520
+  },
+  {
+    "word": "negotiate",
+    "ipa_uk": "/nəˈɡəʊ.ʃi.eɪt/",
+    "ipa_us": "/nəˈɡoʊ.ʃi.eɪt/",
+    "pos": "verb",
+    "meaning_vi": "đàm phán, thương lượng",
+    "examples": [
+      { "en": "They met to negotiate the terms of the partnership.", "vi": "Họ đã gặp nhau để đàm phán các điều khoản hợp tác." }
+    ],
+    "synonyms": ["bargain", "discuss", "settle"],
+    "collocations": [
+      { "phrase": "negotiate a salary", "meaning_vi": "thương lượng mức lương", "example": "Prepare market data before you negotiate a salary." }
+    ],
+    "cefr_level": "B2",
+    "frequency_rank": 1180
+  },
+  {
+    "word": "nuance",
+    "ipa_uk": "/ˈnjuː.ɑːns/",
+    "ipa_us": "/ˈnuː.ɑːns/",
+    "pos": "noun",
+    "meaning_vi": "sắc thái tinh tế (về nghĩa, cảm xúc, giọng điệu)",
+    "examples": [
+      { "en": "Reading novels helps you notice subtle nuances in word choice.", "vi": "Đọc tiểu thuyết giúp bạn nhận ra những sắc thái tinh tế trong cách chọn từ." }
+    ],
+    "synonyms": ["subtlety", "shade", "distinction"],
+    "collocations": [
+      { "phrase": "subtle nuance", "meaning_vi": "sắc thái tinh tế", "example": "Translators must capture every subtle nuance." }
+    ],
+    "cefr_level": "C1",
+    "frequency_rank": 3100
+  },
+  {
+    "word": "opportunity",
+    "ipa_uk": "/ˌɒp.əˈtjuː.nə.ti/",
+    "ipa_us": "/ˌɑː.pɚˈtuː.nə.t̬i/",
+    "pos": "noun",
+    "meaning_vi": "cơ hội, thời cơ",
+    "examples": [
+      { "en": "Speaking English opens up global career opportunities.", "vi": "Nói tiếng Anh mở ra nhiều cơ hội nghề nghiệp toàn cầu." }
+    ],
+    "synonyms": ["chance", "opening", "prospect"],
+    "collocations": [
+      { "phrase": "seize an opportunity", "meaning_vi": "nắm bắt cơ hội", "example": "She seized the opportunity to study abroad." }
+    ],
+    "cefr_level": "A2",
+    "frequency_rank": 310
+  },
+  {
+    "word": "persuade",
+    "ipa_uk": "/pəˈsweɪd/",
+    "ipa_us": "/pɚˈsweɪd/",
+    "pos": "verb",
+    "meaning_vi": "thuyết phục",
+    "examples": [
+      { "en": "Clear evidence persuaded the committee to approve the proposal.", "vi": "Bằng chứng rõ ràng đã thuyết phục hội đồng phê duyệt đề xuất." }
+    ],
+    "synonyms": ["convince", "influence", "sway"],
+    "collocations": [
+      { "phrase": "persuade someone to", "meaning_vi": "thuyết phục ai làm gì", "example": "He persuaded his friend to join the speaking club." }
+    ],
+    "cefr_level": "B1",
+    "frequency_rank": 920
+  },
+  {
+    "word": "pronunciation",
+    "ipa_uk": "/prəˌnʌn.siˈeɪ.ʃən/",
+    "ipa_us": "/prəˌnʌn.siˈeɪ.ʃən/",
+    "pos": "noun",
+    "meaning_vi": "cách phát âm",
+    "examples": [
+      { "en": "Compare British and American pronunciation using the IPA symbols.", "vi": "So sánh cách phát âm Anh-Anh và Anh-Mỹ bằng ký hiệu phiên âm IPA." }
+    ],
+    "synonyms": ["articulation", "enunciation", "accent"],
+    "collocations": [
+      { "phrase": "clear pronunciation", "meaning_vi": "phát âm rõ ràng", "example": "Clear pronunciation matters more than having a native accent." }
+    ],
+    "cefr_level": "A2",
+    "frequency_rank": 1350
+  },
+  {
+    "word": "resilient",
+    "ipa_uk": "/rɪˈzɪl.i.ənt/",
+    "ipa_us": "/rɪˈzɪl.i.ənt/",
+    "pos": "adjective",
+    "meaning_vi": "kiên cường, bền bỉ, nhanh phục hồi sau khó khăn",
+    "examples": [
+      { "en": "Resilient learners treat mistakes as feedback rather than failure.", "vi": "Người học kiên cường xem lỗi sai là phản hồi chứ không phải thất bại." }
+    ],
+    "synonyms": ["adaptable", "tough", "hardy"],
+    "collocations": [
+      { "phrase": "remain resilient", "meaning_vi": "giữ vững sự bền bỉ", "example": "Teams must remain resilient during rapid change." }
+    ],
+    "cefr_level": "C1",
+    "frequency_rank": 2650
+  },
+  {
+    "word": "retention",
+    "ipa_uk": "/rɪˈten.ʃən/",
+    "ipa_us": "/rɪˈten.ʃən/",
+    "pos": "noun",
+    "meaning_vi": "khả năng ghi nhớ, sự lưu giữ kiến thức",
+    "examples": [
+      { "en": "Active recall significantly improves long-term vocabulary retention.", "vi": "Gợi nhớ chủ động cải thiện đáng kể khả năng ghi nhớ từ vựng dài hạn." }
+    ],
+    "synonyms": ["memory", "recall", "preservation"],
+    "collocations": [
+      { "phrase": "memory retention", "meaning_vi": "khả năng lưu giữ trí nhớ", "example": "Sleep plays a vital role in memory retention." }
+    ],
+    "cefr_level": "C1",
+    "frequency_rank": 2800
+  },
+  {
+    "word": "schedule",
+    "ipa_uk": "/ˈʃedʒ.uːl/",
+    "ipa_us": "/ˈskedʒ.uːl/",
+    "pos": "noun",
+    "meaning_vi": "lịch trình, thời gian biểu",
+    "examples": [
+      { "en": "Even with a busy schedule, ten minutes of flashcards makes a difference.", "vi": "Dù lịch trình bận rộn, mười phút học thẻ nhớ mỗi ngày vẫn tạo ra khác biệt." }
+    ],
+    "synonyms": ["timetable", "agenda", "plan"],
+    "collocations": [
+      { "phrase": "ahead of schedule", "meaning_vi": "sớm hơn dự kiến", "example": "We finished the project ahead of schedule." },
+      { "phrase": "tight schedule", "meaning_vi": "lịch trình dày đặc", "example": "I have a tight schedule this Monday." }
+    ],
+    "cefr_level": "A2",
+    "frequency_rank": 510
+  },
+  {
+    "word": "significant",
+    "ipa_uk": "/sɪɡˈnɪf.ɪ.kənt/",
+    "ipa_us": "/sɪɡˈnɪf.ə.kənt/",
+    "pos": "adjective",
+    "meaning_vi": "đáng kể, quan trọng, có ý nghĩa lớn",
+    "examples": [
+      { "en": "There has been a significant increase in her speaking speed.", "vi": "Tốc độ nói của cô ấy đã tăng lên đáng kể." }
+    ],
+    "synonyms": ["notable", "considerable", "major"],
+    "collocations": [
+      { "phrase": "significant impact", "meaning_vi": "tác động đáng kể", "example": "Daily reading has a significant impact on writing skill." }
+    ],
+    "cefr_level": "B2",
+    "frequency_rank": 430
+  },
+  {
+    "word": "strategy",
+    "ipa_uk": "/ˈstræt.ə.dʒi/",
+    "ipa_us": "/ˈstræt̬.ə.dʒi/",
+    "pos": "noun",
+    "meaning_vi": "chiến lược, phương pháp tổng thể",
+    "examples": [
+      { "en": "Shadowing is a proven strategy for improving rhythm and intonation.", "vi": "Nói nhại theo mẫu là chiến lược đã được kiểm chứng để cải thiện nhịp điệu và ngữ điệu." }
+    ],
+    "synonyms": ["plan", "approach", "tactic"],
+    "collocations": [
+      { "phrase": "learning strategy", "meaning_vi": "chiến lược học tập", "example": "Choose a learning strategy that fits your routine." }
+    ],
+    "cefr_level": "B1",
+    "frequency_rank": 490
+  },
+  {
+    "word": "take off",
+    "ipa_uk": "/teɪk ɒf/",
+    "ipa_us": "/teɪk ɔːf/",
+    "pos": "phrasal verb",
+    "meaning_vi": "cất cánh (máy bay); cởi ra (quần áo); khởi sắc nhanh chóng",
+    "examples": [
+      { "en": "The plane will take off in twenty minutes.", "vi": "Máy bay sẽ cất cánh trong hai mươi phút nữa." },
+      { "en": "Her online business really took off this year.", "vi": "Công việc kinh doanh trực tuyến của cô ấy thực sự khởi sắc trong năm nay." }
+    ],
+    "synonyms": ["depart", "remove", "boom"],
+    "collocations": [
+      { "phrase": "take off your shoes", "meaning_vi": "cởi giày ra", "example": "Please take off your shoes before entering." }
+    ],
+    "cefr_level": "A2",
+    "frequency_rank": 680
+  },
+  {
+    "word": "translate",
+    "ipa_uk": "/trænzˈleɪt/",
+    "ipa_us": "/trænsˈleɪt/",
+    "pos": "verb",
+    "meaning_vi": "dịch, biên dịch; chuyển hóa thành",
+    "examples": [
+      { "en": "Don't translate word for word; focus on the whole meaning.", "vi": "Đừng dịch từng từ một; hãy tập trung vào ý nghĩa toàn câu." }
+    ],
+    "synonyms": ["interpret", "render", "convert"],
+    "collocations": [
+      { "phrase": "translate word for word", "meaning_vi": "dịch sát từng chữ", "example": "Idioms rarely make sense if you translate word for word." }
+    ],
+    "cefr_level": "A2",
+    "frequency_rank": 770
+  },
+  {
+    "word": "ubiquitous",
+    "ipa_uk": "/juːˈbɪk.wɪ.təs/",
+    "ipa_us": "/juːˈbɪk.wə.t̬əs/",
+    "pos": "adjective",
+    "meaning_vi": "có mặt ở khắp mọi nơi, phổ biến khắp nơi",
+    "examples": [
+      { "en": "Smartphones have become ubiquitous in modern classrooms.", "vi": "Điện thoại thông minh đã trở nên phổ biến ở khắp nơi trong các lớp học hiện đại." }
+    ],
+    "synonyms": ["omnipresent", "everywhere", "pervasive"],
+    "collocations": [
+      { "phrase": "ubiquitous presence", "meaning_vi": "sự hiện diện khắp nơi", "example": "Wi-Fi has an almost ubiquitous presence in cafes." }
+    ],
+    "cefr_level": "C1",
+    "frequency_rank": 3800
+  },
+  {
+    "word": "vocabulary",
+    "ipa_uk": "/vəˈkæb.jə.lər.i/",
+    "ipa_us": "/voʊˈkæb.jə.ler.i/",
+    "pos": "noun",
+    "meaning_vi": "từ vựng, vốn từ",
+    "examples": [
+      { "en": "Reading short stories daily expands your active vocabulary.", "vi": "Đọc truyện ngắn hằng ngày giúp mở rộng vốn từ vựng chủ động của bạn." }
+    ],
+    "synonyms": ["lexicon", "word stock", "terminology"],
+    "collocations": [
+      { "phrase": "expand vocabulary", "meaning_vi": "mở rộng vốn từ vựng", "example": "Keep a notebook to expand your vocabulary." }
+    ],
+    "cefr_level": "A2",
+    "frequency_rank": 640
+  },
+  {
+    "word": "workflow",
+    "ipa_uk": "/ˈwɜːk.fləʊ/",
+    "ipa_us": "/ˈwɝːk.floʊ/",
+    "pos": "noun",
+    "meaning_vi": "quy trình làm việc, luồng công việc",
+    "examples": [
+      { "en": "Quick lookup integrates smoothly into a daily reading workflow.", "vi": "Tính năng tra nhanh tích hợp mượt mà vào quy trình đọc hằng ngày." }
+    ],
+    "synonyms": ["process", "pipeline", "routine"],
+    "collocations": [
+      { "phrase": "streamline a workflow", "meaning_vi": "tinh gọn quy trình làm việc", "example": "Automation helped streamline their workflow." }
+    ],
+    "cefr_level": "B2",
+    "frequency_rank": 2450
+  }
+]
