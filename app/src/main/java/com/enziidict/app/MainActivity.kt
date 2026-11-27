@@ -23,6 +23,8 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -34,6 +36,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,7 +48,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.enziidict.app.core.model.SpeakingTopic
 import com.enziidict.app.core.network.AppThemeMode
+import com.enziidict.app.core.network.AppUpdateManager
 import com.enziidict.app.core.network.SettingsDataStore
+import com.enziidict.app.core.network.UpdateCheckOutcome
 import com.enziidict.app.core.network.UserSettings
 import com.enziidict.app.feature.dictionary.DictionaryScreen
 import com.enziidict.app.feature.home.HomeScreen
@@ -75,6 +80,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var settingsDataStore: SettingsDataStore
 
+    @Inject
+    lateinit var appUpdateManager: AppUpdateManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -88,6 +96,13 @@ class MainActivity : ComponentActivity() {
                 AppThemeMode.DARK -> true
             }
             val scope = rememberCoroutineScope()
+            var hasAppUpdate by remember { mutableStateOf(false) }
+
+            LaunchedEffect(Unit) {
+                hasAppUpdate = runCatching {
+                    appUpdateManager.checkLatestRelease() is UpdateCheckOutcome.UpdateAvailable
+                }.getOrDefault(false)
+            }
 
             EnziiDictTheme(darkTheme = isDark) {
                 var currentTab by remember { mutableStateOf(MainTab.HOME) }
@@ -129,6 +144,7 @@ class MainActivity : ComponentActivity() {
                         EnziiMainScaffold(
                             currentTab = currentTab,
                             isDark = isDark,
+                            hasAppUpdate = hasAppUpdate,
                             onSelectTab = { currentTab = it },
                             onOpenReading = { showReadingScreen = true },
                             onToggleTheme = {
@@ -193,6 +209,7 @@ class MainActivity : ComponentActivity() {
 private fun EnziiMainScaffold(
     currentTab: MainTab,
     isDark: Boolean,
+    hasAppUpdate: Boolean,
     onSelectTab: (MainTab) -> Unit,
     onOpenReading: () -> Unit,
     onToggleTheme: () -> Unit,
@@ -223,7 +240,15 @@ private fun EnziiMainScaffold(
                         )
                     }
                     IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Default.Settings, contentDescription = "Cài đặt")
+                        BadgedBox(
+                            badge = {
+                                if (hasAppUpdate) {
+                                    Badge()
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.Settings, contentDescription = "Cài đặt")
+                        }
                     }
                 }
             )

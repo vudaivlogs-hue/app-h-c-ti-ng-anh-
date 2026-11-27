@@ -1,12 +1,18 @@
 package com.enziidict.app.feature.settings
 
+import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.enziidict.app.BuildConfig
+import com.enziidict.app.core.network.AppReleaseInfo
 import com.enziidict.app.core.network.AppThemeMode
+import com.enziidict.app.core.network.AppUpdateManager
 import com.enziidict.app.core.network.GeminiModelPresets
 import com.enziidict.app.core.network.OfflineMlKitTranslator
 import com.enziidict.app.core.network.SecureApiKeyStore
 import com.enziidict.app.core.network.SettingsDataStore
+import com.enziidict.app.core.network.UpdateCheckOutcome
+import com.enziidict.app.core.network.UpdateDownloadState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -14,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.File
 import javax.inject.Inject
 
 data class SettingsUiState(
@@ -24,14 +31,21 @@ data class SettingsUiState(
     val isMlKitPackDownloaded: Boolean = false,
     val isMlKitBusy: Boolean = false,
     val statusMessage: String? = null,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val currentVersionName: String = BuildConfig.VERSION_NAME,
+    val currentVersionCode: Int = BuildConfig.VERSION_CODE,
+    val isCheckingUpdate: Boolean = false,
+    val availableRelease: AppReleaseInfo? = null,
+    val updateStatusText: String? = null,
+    val downloadState: UpdateDownloadState = UpdateDownloadState.Idle
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val secureApiKeyStore: SecureApiKeyStore,
     private val settingsDataStore: SettingsDataStore,
-    private val mlKitTranslator: OfflineMlKitTranslator
+    private val mlKitTranslator: OfflineMlKitTranslator,
+    private val appUpdateManager: AppUpdateManager
 ) : ViewModel() {
 
     private val mlKitDownloadedFlow = MutableStateFlow(false)
@@ -39,13 +53,22 @@ class SettingsViewModel @Inject constructor(
     private val statusMessageFlow = MutableStateFlow<String?>(null)
     private val errorMessageFlow = MutableStateFlow<String?>(null)
 
+    private val checkingUpdateFlow = MutableStateFlow(false)
+    private val availableReleaseFlow = MutableStateFlow<AppReleaseInfo?>(null)
+    private val updateStatusTextFlow = MutableStateFlow<String?>(null)
+    private val downloadStateFlow = MutableStateFlow<UpdateDownloadState>(UpdateDownloadState.Idle)
+
     val uiState: StateFlow<SettingsUiState> = combine(
         secureApiKeyStore.apiKeyFlow,
         settingsDataStore.settingsFlow,
         mlKitDownloadedFlow,
         mlKitBusyFlow,
         statusMessageFlow,
-        errorMessageFlow
+        errorMessageFlow,
+        checkingUpdateFlow,
+        availableReleaseFlow,
+        updateStatusTextFlow,
+        downloadStateFlow
     ) { values ->
         val apiKey = values[0] as String
         val settings = values[1] as com.enziidict.app.core.network.UserSettings
@@ -53,6 +76,10 @@ class SettingsViewModel @Inject constructor(
         val busy = values[3] as Boolean
         val status = values[4] as String?
         val error = values[5] as String?
+        val checkingUpdate = values[6] as Boolean
+        val release = values[7] as AppReleaseInfo?
+        val updateText = values[8] as String?
+        val downloadState = values[9] as UpdateDownloadState
 
         SettingsUiState(
             apiKey = apiKey,
@@ -62,7 +89,13 @@ class SettingsViewModel @Inject constructor(
             isMlKitPackDownloaded = downloaded,
             isMlKitBusy = busy,
             statusMessage = status,
-            errorMessage = error
+            errorMessage = error,
+            currentVersionName = BuildConfig.VERSION_NAME,
+            currentVersionCode = BuildConfig.VERSION_CODE,
+            isCheckingUpdate = checkingUpdate,
+            availableRelease = release,
+            updateStatusText = updateText,
+            downloadState = downloadState
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
@@ -74,6 +107,66 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             mlKitDownloadedFlow.value = mlKitTranslator.isEnViPackDownloaded()
         }
+    }
+
+    fun checkForUpdates() {
+        if (checkingUpdateFlow.value) return
+        viewModelScope.launch {
+            checkingUpdateFlow.value = true
+            updateStatusTextFlow.value = "Đang kiểm tra bản phát hành mới từ GitHub..."
+            when (val outcome = appUpdateManager.checkLatestRelease()) {
+                is UpdateCheckOutcome.UpdateAvailable -> {
+                    availableReleaseFlow.value = outcome.release
+                    updateStatusTextFlow.value = "Đã có phiên bản mới v${outcome.release.versionName}!"
+                }
+                is UpdateCheckOutcome.UpToDate -> {
+                    availableReleaseFlow.value = null
+                    updateStatusTextFlow.value = "Bạn đang dùng phiên bản mới nhất (v${outcome.currentVersion})."
+                }
+                is UpdateCheckOutcome.NoReleaseYet -> {
+                    availableReleaseFlow.value = null
+                    updateStatusTextFlow.value = outcome.messageVi
+                }
+                is UpdateCheckOutcome.Error -> {
+                    updateStatusTextFlow.value = outcome.messageVi
+                }
+            }
+            checkingUpdateFlow.value = false
+        }
+    }
+
+    fun downloadAndPrepareUpdate() {
+        val release = availableReleaseFlow.value ?: return
+        if (downloadStateFlow.value is UpdateDownloadState.Downloading) return
+
+        viewModelScope.launch {
+            val totalMb = release.apkSizeBytes / (1024.0 * 1024.0)
+            downloadStateFlow.value = UpdateDownloadState.Downloading(0, 0.0, totalMb)
+            updateStatusTextFlow.value = "Đang tải bản cập nhật v${release.versionName}..."
+
+            val result = appUpdateManager.downloadApk(release) { pct, dlMb, totMb ->
+                downloadStateFlow.value = UpdateDownloadState.Downloading(pct, dlMb, totMb)
+            }
+            result.onSuccess { file ->
+                downloadStateFlow.value = UpdateDownloadState.ReadyToInstall(file, release.versionName)
+                updateStatusTextFlow.value = "Đã tải xong v${release.versionName}. Bấm Cài đặt để cập nhật giữ nguyên dữ liệu."
+            }.onFailure { err ->
+                val msg = "Tải bản cập nhật thất bại: ${err.localizedMessage ?: "Lỗi mạng"}"
+                downloadStateFlow.value = UpdateDownloadState.Failed(msg)
+                updateStatusTextFlow.value = msg
+            }
+        }
+    }
+
+    fun canInstallPackages(): Boolean = appUpdateManager.canRequestPackageInstalls()
+
+    fun createInstallIntent(apkFile: File): Intent = appUpdateManager.createInstallApkIntent(apkFile)
+
+    fun createInstallPermissionIntent(): Intent = appUpdateManager.createUnknownSourcesSettingsIntent()
+
+    fun notifyNeedInstallPermission() {
+        updateStatusTextFlow.value =
+            "Vui lòng bật \"Cho phép từ nguồn này\" trong Cài đặt vừa mở, sau đó quay lại bấm \"Cài đặt ngay\"."
     }
 
     fun saveApiKey(rawKey: String) {

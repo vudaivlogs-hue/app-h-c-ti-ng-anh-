@@ -9,24 +9,46 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+val appVersionCode = (project.findProperty("enziiVersionCode") as String?)
+    ?.trim()
+    ?.toIntOrNull()
+    ?: 1
+val appVersionName = (project.findProperty("enziiVersionName") as String?)
+    ?.trim()
+    ?.takeIf { it.isNotEmpty() }
+    ?: "0.1.0"
+
 val keystorePropertiesFile = rootProject.file("keystore.properties")
 val keystoreProperties = Properties().apply {
     if (keystorePropertiesFile.exists()) {
         keystorePropertiesFile.inputStream().use { load(it) }
     }
 }
-val storeFileProp = keystoreProperties.getProperty("storeFile")?.trim().orEmpty()
-val storePassProp = keystoreProperties.getProperty("storePassword")?.trim().orEmpty()
-val keyAliasProp = keystoreProperties.getProperty("keyAlias")?.trim().orEmpty()
-val keyPassProp = keystoreProperties.getProperty("keyPassword")?.trim().orEmpty()
-val hasReleaseKeystore = keystorePropertiesFile.exists() &&
-    storeFileProp.isNotEmpty() &&
-    rootProject.file(storeFileProp).exists() &&
-    storePassProp.isNotEmpty() &&
-    storePassProp != "your_keystore_password_here" &&
-    keyAliasProp.isNotEmpty() &&
-    keyPassProp.isNotEmpty() &&
-    keyPassProp != "your_key_password_here"
+
+val envStorePath = System.getenv("ENZII_KEYSTORE_PATH")?.trim().orEmpty()
+val envStorePass = System.getenv("ENZII_KEYSTORE_PASSWORD")?.trim().orEmpty()
+val envKeyAlias = System.getenv("ENZII_KEY_ALIAS")?.trim().orEmpty()
+val envKeyPass = System.getenv("ENZII_KEY_PASSWORD")?.trim().orEmpty()
+val hasEnvKeystore = envStorePath.isNotEmpty() &&
+    file(envStorePath).exists() &&
+    envStorePass.isNotEmpty() &&
+    envKeyAlias.isNotEmpty() &&
+    envKeyPass.isNotEmpty()
+
+val localStorePath = keystoreProperties.getProperty("storeFile")?.trim().orEmpty()
+val localStorePass = keystoreProperties.getProperty("storePassword")?.trim().orEmpty()
+val localKeyAlias = keystoreProperties.getProperty("keyAlias")?.trim().orEmpty()
+val localKeyPass = keystoreProperties.getProperty("keyPassword")?.trim().orEmpty()
+val hasLocalKeystore = keystorePropertiesFile.exists() &&
+    localStorePath.isNotEmpty() &&
+    rootProject.file(localStorePath).exists() &&
+    localStorePass.isNotEmpty() &&
+    localStorePass != "your_keystore_password_here" &&
+    localKeyAlias.isNotEmpty() &&
+    localKeyPass.isNotEmpty() &&
+    localKeyPass != "your_key_password_here"
+
+val hasReleaseKeystore = hasEnvKeystore || hasLocalKeystore
 
 android {
     namespace = "com.enziidict.app"
@@ -36,19 +58,27 @@ android {
         applicationId = "com.enziidict.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
+
+        buildConfigField("String", "GITHUB_OWNER", "\"vudaivlogs-hue\"")
+        buildConfigField("String", "GITHUB_REPO", "\"app-h-c-ti-ng-anh-\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
         create("release") {
-            if (hasReleaseKeystore) {
-                storeFile = rootProject.file(storeFileProp)
-                storePassword = storePassProp
-                keyAlias = keyAliasProp
-                keyPassword = keyPassProp
+            if (hasEnvKeystore) {
+                storeFile = file(envStorePath)
+                storePassword = envStorePass
+                keyAlias = envKeyAlias
+                keyPassword = envKeyPass
+            } else if (hasLocalKeystore) {
+                storeFile = rootProject.file(localStorePath)
+                storePassword = localStorePass
+                keyAlias = localKeyAlias
+                keyPassword = localKeyPass
             }
         }
     }

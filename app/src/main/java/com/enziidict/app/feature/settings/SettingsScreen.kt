@@ -17,8 +17,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.InstallMobile
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
@@ -30,6 +32,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -44,6 +47,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -52,6 +56,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.enziidict.app.core.network.AppThemeMode
 import com.enziidict.app.core.network.GeminiModelPresets
+import com.enziidict.app.core.network.UpdateDownloadState
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,6 +66,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     var keyDraft by remember(state.apiKey) { mutableStateOf(state.apiKey) }
     var showKey by remember { mutableStateOf(false) }
 
@@ -324,6 +331,136 @@ fun SettingsScreen(
                             Icon(Icons.Default.Delete, contentDescription = null)
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("Xóa gói")
+                        }
+                    }
+                }
+            }
+
+            // 4. In-App Update via GitHub Releases
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.SystemUpdate,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Cập nhật ứng dụng (GitHub Releases)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Text(
+                        text = "Phiên bản hiện tại: v${state.currentVersionName} (build ${state.currentVersionCode})",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    state.updateStatusText?.let { statusText ->
+                        Text(
+                            text = statusText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    val release = state.availableRelease
+                    if (release != null) {
+                        HorizontalDivider()
+                        val sizeText = if (release.apkSizeBytes > 0L) {
+                            String.format(Locale.US, "%.1f MB", release.apkSizeBytes / (1024.0 * 1024.0))
+                        } else {
+                            ""
+                        }
+                        Text(
+                            text = listOf("Bản mới: v${release.versionName}", sizeText)
+                                .filter { it.isNotEmpty() }
+                                .joinToString(" • "),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        if (release.releaseNotes.isNotBlank()) {
+                            Text(
+                                text = release.releaseNotes,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    when (val dl = state.downloadState) {
+                        is UpdateDownloadState.Downloading -> {
+                            LinearProgressIndicator(
+                                progress = { (dl.progressPercent / 100f).coerceIn(0f, 1f) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Text(
+                                text = String.format(
+                                    Locale.US,
+                                    "Đang tải: %d%% (%.1f / %.1f MB)",
+                                    dl.progressPercent,
+                                    dl.downloadedMb,
+                                    dl.totalMb
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        is UpdateDownloadState.ReadyToInstall -> {
+                            Button(
+                                onClick = {
+                                    if (viewModel.canInstallPackages()) {
+                                        context.startActivity(viewModel.createInstallIntent(dl.apkFile))
+                                    } else {
+                                        viewModel.notifyNeedInstallPermission()
+                                        context.startActivity(viewModel.createInstallPermissionIntent())
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Default.InstallMobile, contentDescription = null)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Cài đặt bản v${dl.versionName} ngay")
+                            }
+                        }
+                        else -> Unit
+                    }
+
+                    val isDownloading = state.downloadState is UpdateDownloadState.Downloading
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = viewModel::checkForUpdates,
+                            enabled = !state.isCheckingUpdate && !isDownloading,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            if (state.isCheckingUpdate) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                            }
+                            Text("Kiểm tra cập nhật")
+                        }
+
+                        if (release != null && state.downloadState !is UpdateDownloadState.ReadyToInstall) {
+                            Button(
+                                onClick = viewModel::downloadAndPrepareUpdate,
+                                enabled = !isDownloading,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.CloudDownload, contentDescription = null)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Tải bản mới")
+                            }
                         }
                     }
                 }

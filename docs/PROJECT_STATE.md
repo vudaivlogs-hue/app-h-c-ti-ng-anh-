@@ -1,8 +1,8 @@
 # Trạng thái Dự án — Enzii Dict (`com.enziidict.app`)
 
-> **Cập nhật lần cuối**: 2026-11-27 (23:28)  
-> **Phiên gần nhất**: [006_hoan-thien-release-va-khoi-tao-git.md](./sessions/006_hoan-thien-release-va-khoi-tao-git.md)  
-> **Trạng thái build**: `BUILD SUCCESSFUL` — **30/30** unit & Robolectric tests đạt (`testDebugUnitTest`), `assembleDebug` (`85,044,173` bytes) & `assembleRelease` R8 `arm64-v8a` (`20,046,986` bytes) đóng gói sạch; Git local đã khởi tạo trên nhánh `main`.
+> **Cập nhật lần cuối**: 2026-11-28 (00:07)  
+> **Phiên gần nhất**: [007_tu-dong-cap-nhat-github-releases.md](./sessions/007_tu-dong-cap-nhat-github-releases.md)  
+> **Trạng thái build**: `BUILD SUCCESSFUL` — **35/35** unit & Robolectric tests đạt (`testDebugUnitTest`), `assembleDebug` (`85,594,940` bytes) & `assembleRelease` R8 `arm64-v8a` (`20,063,830` bytes); đã cấu hình In-App Update (GitHub Releases) + CI workflow ký APK tự động.
 
 ---
 
@@ -30,6 +30,7 @@ c:\O_D\app học tiếng anh\
 ├── AGENTS.md                            # Quy tắc workspace tự động nạp cho Antigravity
 ├── README.md                            # Hướng dẫn tổng quan, build & chạy máy ảo
 ├── keystore.properties.example          # Mẫu cấu hình ký số Release (copy sang keystore.properties)
+├── .github/workflows/release-apk.yml    # CI tự động build, ký & phát hành APK Release lên GitHub Releases
 ├── docs/
 │   ├── PROJECT_STATE.md                           # Tài liệu trạng thái hiện tại (file này)
 │   └── sessions/
@@ -38,9 +39,11 @@ c:\O_D\app học tiếng anh\
 │       ├── 003_thu-muc-so-tay-wordfolder.md            # Nhật ký nâng cấp WordFolder, Migration v1->v2 & SaveToFolderBottomSheet
 │       ├── 004_tra-tu-dien-online-va-cache-offline.md  # Nhật ký tra cứu Online (Free Dictionary + ML Kit/Gemini) & cache Room
 │       ├── 005_cau-hinh-release-apk-r8-keystore.md     # Nhật ký cấu hình Release R8/ProGuard, Keystore & arm64-v8a
-│       └── 006_hoan-thien-release-va-khoi-tao-git.md   # Nhật ký keystore.properties, .vscode Wrapper & Git init sạch
+│       ├── 006_hoan-thien-release-va-khoi-tao-git.md   # Nhật ký keystore.properties, .vscode Wrapper & Git init sạch
+│       └── 007_tu-dong-cap-nhat-github-releases.md     # Nhật ký In-App Update (GitHub Releases) & CI signed release
 ├── scripts/
-│   └── build_dictionary_db.py           # Parse FVDP / Wiktionary JSONL / seed -> assets/dictionary.db
+│   ├── build_dictionary_db.py           # Parse FVDP / Wiktionary JSONL / seed -> assets/dictionary.db
+│   └── export_keystore_base64.ps1       # Xuất enzii-release.jks sang Base64 vào Clipboard cho GitHub Secrets
 ├── tools/dict-builder/
 │   ├── seed_dictionary.json             # 40 mục từ chi tiết (IPA UK/US, ví dụ, đồng nghĩa, collocations)
 │   └── seed_articles.json               # 5 bài đọc song ngữ A2 – C1
@@ -59,7 +62,7 @@ c:\O_D\app học tiếng anh\
     │       │   ├── model/               # Dictionary, SRS, Speaking, Grammar, Reading models
     │       │   ├── database/            # DictionaryRepository (3-tier search, lemmatization, cache online, save SRS)
     │       │   ├── audio/               # TtsManager, OnlineAudioPlayer, LiveAudioManager, ShadowingAudioController, ShadowingSpeechRecognizer, PronunciationScorer
-    │       │   └── network/             # SecureApiKeyStore, SettingsDataStore, OfflineMlKitTranslator, OnlineDictionaryRepository, GeminiGrammarService, GeminiLiveClient, SpeakingEvaluationService, GeminiShadowingCoachService
+    │       │   └── network/             # SecureApiKeyStore, SettingsDataStore, OfflineMlKitTranslator, OnlineDictionaryRepository, AppUpdateManager, GeminiGrammarService, GeminiLiveClient, SpeakingEvaluationService, GeminiShadowingCoachService
     │       └── feature/
     │           ├── home/                # HomeScreen (Bento Grid: Streak, SRS due, AI Speaking shortcuts, Word of the Day)
     │           ├── dictionary/          # DictionaryScreen (tra offline <15ms + tra/mở rộng Online, audio bản xứ, nút Shadow)
@@ -70,7 +73,7 @@ c:\O_D\app học tiếng anh\
     │           ├── speaking/            # SpeakingScreen (5 kịch bản, 3 trình độ, Live PCM + AEC) & SpeakingHistoryScreen
     │           ├── shadowing/           # ShadowingScreen (chunks, 0.75x–1.15x, loop, đếm ngược, ghi âm đối chiếu, AI stress/linking, lịch sử)
     │           └── settings/            # SettingsScreen (BYOK API Key AES-256, model Gemini, Theme, gói offline ML Kit)
-    └── test/java/com/enziidict/app/     # 10 bộ test (30 test cases) — 100% PASS
+    └── test/java/com/enziidict/app/     # 11 bộ test (35 test cases) — 100% PASS
 ```
 
 ---
@@ -87,7 +90,8 @@ c:\O_D\app học tiếng anh\
 - [x] **AI Speaking Partner & Lịch sử (`feature/speaking`)**: `LiveAudioManager` (PCM 16kHz + `AcousticEchoCanceler` + `AudioTrack` 24kHz), Gemini Live WebSocket, 5 kịch bản & 3 trình độ, sóng âm động, phụ đề song ngữ, lưu `speaking_sessions`/`speaking_messages`, đánh giá AI sau buổi nói & lưu từ mới vào SRS.
 - [x] **Luyện Shadowing + AI Coach (`feature/shadowing`)**: Tách cụm nhịp (chunks), mở từ Từ điển/Đọc/4 chủ đề mẫu, UK/US `0.75x–1.15x`, Loop, tự động thu sau khi nghe (3-2-1), `MediaRecorder` `.m4a` + đối chiếu `Giọng mẫu ↔ Giọng của bạn`, `SpeechRecognizer` offline + highlight 3 màu từng từ, Gemini phân tích trọng âm/nối âm, lưu lịch sử tiến bộ & từ hay vấp.
 - [x] **Máy ảo Android 14 (`Enzii_Pixel_API34`)**: Đã cài Emulator (WHPX), AVD Pixel 6 (2GB RAM) và tạo [start-emulator.bat](../start-emulator.bat).
-- [x] **Cấu hình Release APK, Keystore, R8/ProGuard & ABI `arm64-v8a`**: `.gitignore` bảo mật secret, `keystore.properties.example`, `app/build.gradle.kts` (`isMinifyEnabled = true`, `isShrinkResources = true`, `abiFilters = ["arm64-v8a"]`), `app/proguard-rules.pro` cho Room/Hilt/ML Kit/Kotlinx Serialization/Tink; `assembleRelease` thành công (~20.0 MB).
+- [x] **Cấu hình Release APK, Keystore, R8/ProGuard & ABI `arm64-v8a`**: `.gitignore` bảo mật secret, `keystore.properties.example`, `app/build.gradle.kts` (`isMinifyEnabled = true`, `isShrinkResources = true`, `abiFilters = ["arm64-v8a"]`), `app/proguard-rules.pro` cho Room/Hilt/ML Kit/Kotlinx Serialization/Tink; `assembleRelease` thành công (~20.1 MB).
+- [x] **Tự động Cập nhật Trong App (GitHub Releases) & CI/CD Signed Release**: `AppUpdateManager` + `FileProvider` + thẻ cập nhật trong `SettingsScreen` + badge `MainActivity` + workflow `.github/workflows/release-apk.yml` tự tăng `versionCode` và ký bằng `enzii-release.jks` qua GitHub Secrets.
 
 ### Bước Tiếp Theo Cần Làm Khi Mở Lại Dự Án (Thứ tự Ưu tiên)
 1. **Kiểm thử thủ công thực tế trên máy ảo & điện thoại thật**:
@@ -100,9 +104,10 @@ c:\O_D\app học tiếng anh\
    - Triển khai `DailyReminderWorker` kiểm tra số thẻ đến hạn (`next_review_at <= now`), xin quyền `POST_NOTIFICATIONS` (Android 13+) và thêm công tắc bật/tắt giờ nhắc học trong `SettingsScreen`.
 4. **Mở rộng Lịch sử tra cứu & Lịch sử dịch**:
    - Lưu lịch sử tra từ và lịch sử dịch xuống Room để xem lại offline nhanh từ tab Từ điển / Dịch.
-5. **Điền mật khẩu `keystore.properties`, ký `app-release.apk` & đẩy nhánh `main` lên GitHub**:
-   - Điền mật khẩu thật của `enzii-release.jks` vào `keystore.properties` và chạy `.\gradlew.bat assembleRelease` để xuất `app-release.apk` đã ký (~20 MB).
-   - Chạy `git remote add origin <URL>` và `git push -u origin main`.
+5. **Thêm 4 GitHub Secrets & phát hành bản `v0.2.0` đầu tiên cho In-App Update**:
+   - Chạy `.\scripts\export_keystore_base64.ps1`, dán 4 secret (`ENZII_KEYSTORE_BASE64`, `ENZII_KEYSTORE_PASSWORD`, `ENZII_KEY_ALIAS`, `ENZII_KEY_PASSWORD`) lên GitHub Repository Settings → Secrets and variables → Actions.
+   - Đẩy tag đầu tiên (`git tag v0.2.0; git push origin v0.2.0`) để GitHub Actions tự build & phát hành bản Release đầu tiên.
+   - *(Tùy chọn build local)* Điền mật khẩu thật vào `keystore.properties` và chạy `.\gradlew.bat assembleRelease`.
 
 ---
 
