@@ -1,8 +1,8 @@
 # Trạng thái Dự án — Enzii Dict (`com.enziidict.app`)
 
-> **Cập nhật lần cuối**: 2026-11-28 (00:07)  
-> **Phiên gần nhất**: [007_tu-dong-cap-nhat-github-releases.md](./sessions/007_tu-dong-cap-nhat-github-releases.md)  
-> **Trạng thái build**: `BUILD SUCCESSFUL` — **35/35** unit & Robolectric tests đạt (`testDebugUnitTest`), `assembleDebug` (`85,594,940` bytes) & `assembleRelease` R8 `arm64-v8a` (`20,063,830` bytes); đã cấu hình In-App Update (GitHub Releases) + CI workflow ký APK tự động.
+> **Cập nhật lần cuối**: 2026-11-28 (09:27)  
+> **Phiên gần nhất**: [012_nap-tu-dien-fvdp-109k.md](./sessions/012_nap-tu-dien-fvdp-109k.md)  
+> **Trạng thái build**: `BUILD SUCCESSFUL` — **45/45** unit & Robolectric tests đạt (`testDebugUnitTest`, 15 suites), kho **113.933 mục từ** FVDP (`dictionary.db` = `32.05 MB`), `assembleDebug` (`98,801,029` bytes = `94.22 MB`) (chưa push lên Git theo quy tắc test trước).
 
 ---
 
@@ -40,10 +40,16 @@ c:\O_D\app học tiếng anh\
 │       ├── 004_tra-tu-dien-online-va-cache-offline.md  # Nhật ký tra cứu Online (Free Dictionary + ML Kit/Gemini) & cache Room
 │       ├── 005_cau-hinh-release-apk-r8-keystore.md     # Nhật ký cấu hình Release R8/ProGuard, Keystore & arm64-v8a
 │       ├── 006_hoan-thien-release-va-khoi-tao-git.md   # Nhật ký keystore.properties, .vscode Wrapper & Git init sạch
-│       └── 007_tu-dong-cap-nhat-github-releases.md     # Nhật ký In-App Update (GitHub Releases) & CI signed release
+│       ├── 007_tu-dong-cap-nhat-github-releases.md     # Nhật ký In-App Update (GitHub Releases) & CI signed release
+│       ├── 008_thong-bao-nhac-hoc-workmanager.md       # Nhật ký thông báo WorkManager, POST_NOTIFICATIONS & Deep Link
+│       ├── 009_theo-doi-tien-do-duolingo-va-tong-ket.md # Nhật ký Room v3, Streak Freeze, Daily Quests & Tổng kết học tập
+│       ├── 010_tich-hop-logo-va-linh-vat-chu-dui.md     # Nhật ký WebP chú Dúi (85.6 KB), Adaptive Icon & DuiMascotView
+│       ├── 011_tong-ket-phien-thong-bao-tien-do-va-linh-vat-dui.md # Tổng hợp toàn bộ đợt nâng cấp 008 -> 010 & lỗi đã sửa
+│       └── 012_nap-tu-dien-fvdp-109k.md                 # Nhật ký nạp bộ FVDP 113.933 từ, DictionaryPackUpgrader & benchmark
 ├── scripts/
-│   ├── build_dictionary_db.py           # Parse FVDP / Wiktionary JSONL / seed -> assets/dictionary.db
-│   └── export_keystore_base64.ps1       # Xuất enzii-release.jks sang Base64 vào Clipboard cho GitHub Secrets
+│   ├── build_dictionary_db.py           # Parse FVDP 109K / Wiktionary JSONL / seed -> assets/dictionary.db
+│   ├── export_keystore_base64.ps1       # Xuất enzii-release.jks sang Base64 vào Clipboard cho GitHub Secrets
+│   └── optimize_mascot_assets.py        # Nén logo/5 sắc thái chú Dúi sang WebP + Adaptive Icon
 ├── tools/dict-builder/
 │   ├── seed_dictionary.json             # 40 mục từ chi tiết (IPA UK/US, ví dụ, đồng nghĩa, collocations)
 │   └── seed_articles.json               # 5 bài đọc song ngữ A2 – C1
@@ -51,29 +57,32 @@ c:\O_D\app học tiếng anh\
 └── app/src/
     ├── main/
     │   ├── AndroidManifest.xml          # MainActivity + QuickLookupActivity (ACTION_PROCESS_TEXT)
-    │   ├── assets/dictionary.db         # Pre-packaged SQLite DB (1.046 từ + 5 bài đọc + 7 thẻ mẫu)
+    │   ├── assets/dictionary.db         # Pre-packaged SQLite DB (113.933 từ + 5 bài đọc + 7 thẻ mẫu, 32.05 MB)
+    │   ├── res/                         # drawable-nodpi (7 WebP chú Dúi 85.6 KB) & Adaptive Icon (#0D9488 / #F59E0B)
     │   └── java/com/enziidict/app/
-    │       ├── MainActivity.kt          # 5 tab đáy + AnimatedContent + Light/Dark toggle + Reading/Shadowing/Settings
+    │       ├── MainActivity.kt          # EnziiSplashOverlay + DictionaryPackUpgrader + 5 tab đáy + Summary/Reading/Shadowing/Settings
     │       ├── ui/
     │       │   ├── theme/               # Color.kt, Type.kt, Theme.kt (Light & Dark Mode)
-    │       │   └── components/          # BentoCard, PosPill, CefrPill, IpaAudioPill, EnziiHaptics, StateCards
-    │       ├── data/local/              # EnziiDatabase, DatabaseModule, entity/ & dao/
+    │       │   └── components/          # BentoCard, DuiMascotView (MascotMood/MascotLevel), PosPill, CefrPill, IpaAudioPill, EnziiHaptics
+    │       ├── data/local/              # EnziiDatabase (v3), EnziiDatabaseMigrations (1->2->3), DatabaseModule, entity/ & dao/
     │       ├── core/
     │       │   ├── model/               # Dictionary, SRS, Speaking, Grammar, Reading models
-    │       │   ├── database/            # DictionaryRepository (3-tier search, lemmatization, cache online, save SRS)
+    │       │   ├── database/            # DictionaryRepository, DictionaryPackUpgrader & LearningProgressRepository
     │       │   ├── audio/               # TtsManager, OnlineAudioPlayer, LiveAudioManager, ShadowingAudioController, ShadowingSpeechRecognizer, PronunciationScorer
-    │       │   └── network/             # SecureApiKeyStore, SettingsDataStore, OfflineMlKitTranslator, OnlineDictionaryRepository, AppUpdateManager, GeminiGrammarService, GeminiLiveClient, SpeakingEvaluationService, GeminiShadowingCoachService
+    │       │   ├── network/             # SecureApiKeyStore, SettingsDataStore, OfflineMlKitTranslator, OnlineDictionaryRepository, AppUpdateManager, GeminiGrammarService, GeminiLiveClient, SpeakingEvaluationService, GeminiShadowingCoachService
+    │       │   └── notification/        # EnziiNotificationHelper, StudyNotificationScheduler, DailyStudyReminderWorker, DailyWordNotificationWorker
     │       └── feature/
-    │           ├── home/                # HomeScreen (Bento Grid: Streak, SRS due, AI Speaking shortcuts, Word of the Day)
-    │           ├── dictionary/          # DictionaryScreen (tra offline <15ms + tra/mở rộng Online, audio bản xứ, nút Shadow)
+    │           ├── home/                # HomeScreen (Tooltip chú Dúi, Streak Hero + Dúi HAPPY/SLEEPY, 3 Daily Quests, SRS due)
+    │           ├── progress/            # LearningSummaryScreen, LearningSummaryViewModel & SessionRecapComponents (Recap Flashcard/Speaking)
+    │           ├── dictionary/          # DictionaryScreen (113.933 từ offline + Online, gợi ý chú Dúi INQUISITIVE)
     │           ├── quicklookup/         # QuickLookupActivity (popup nổi ACTION_PROCESS_TEXT)
-    │           ├── srs/                 # FlashcardScreen (lật 3D SM-2, quản lý 3 thư mục chuẩn + thư mục tự tạo)
+    │           ├── srs/                 # FlashcardScreen (lật 3D SM-2, quản lý thư mục, Recap sau phiên)
     │           ├── reading/             # ReadingScreen (5 bài A2–C1, chạm từ tra BottomSheet, Shadowing từng đoạn)
     │           ├── translate/           # TranslateScreen (Tầng 1 ML Kit Offline + Tầng 2 Gemini Grammar Breakdown)
-    │           ├── speaking/            # SpeakingScreen (5 kịch bản, 3 trình độ, Live PCM + AEC) & SpeakingHistoryScreen
-    │           ├── shadowing/           # ShadowingScreen (chunks, 0.75x–1.15x, loop, đếm ngược, ghi âm đối chiếu, AI stress/linking, lịch sử)
-    │           └── settings/            # SettingsScreen (BYOK API Key AES-256, model Gemini, Theme, gói offline ML Kit)
-    └── test/java/com/enziidict/app/     # 11 bộ test (35 test cases) — 100% PASS
+    │           ├── speaking/            # SpeakingScreen (Dúi theo cấp độ BEGINNER/INTERMEDIATE/ADVANCED + FOCUSED khi gọi, Live PCM + AEC) & SpeakingHistoryScreen
+    │           ├── shadowing/           # ShadowingScreen (Dúi FOCUSED/HAPPY/INQUISITIVE, chunks, 0.75x–1.15x, loop, ghi âm đối chiếu, AI stress/linking)
+    │           └── settings/            # SettingsScreen (BYOK API Key AES-256, model Gemini, Theme, gói offline ML Kit, thông báo WorkManager)
+    └── test/java/com/enziidict/app/     # 15 bộ test (45 test cases) — 100% PASS
 ```
 
 ---
@@ -81,33 +90,29 @@ c:\O_D\app học tiếng anh\
 ## 3. Trạng thái Các Module
 
 ### Đã hoàn thành & Kiểm thử
-- [x] **Tầng dữ liệu Room + Pre-packaged SQLite (`data/local`, `scripts/build_dictionary_db.py`)**: 1.046 từ, index `idx_dict_word_prefix` (< 15ms), FTS4 + 4 trigger đồng bộ, tra ngược tiếng Việt `searchByMeaning`.
-- [x] **Trang chủ Bento Grid & Hệ thống UI/UX (`feature/home`, `ui/theme`, `ui/components`)**: Light/Dark Mode, Typography rõ cấp bậc, `PosPill`/`CefrPill`/`IpaAudioPill`, Haptic Feedback, theo dõi Streak học tập.
-- [x] **Tra cứu Từ điển Hybrid (Offline + Online) (`feature/dictionary`, `OnlineDictionaryRepository`) & Tra nhanh (`feature/quicklookup`)**: Tìm kiếm 3 tầng offline (< 15ms, lemmatization) kết hợp tra cứu trực tuyến qua Free Dictionary API + ML Kit / Gemini AI, tự động lưu cache vào Room để tra lại offline, hỗ trợ nút **"Mở rộng Online"** (Anh–Anh, audio bản xứ `OnlineAudioPlayer`, từ trái nghĩa) và gắn nhãn nguồn `Offline`/`Online`.
+- [x] **Bộ Từ điển Lớn FVDP 109K (`113.933` mục từ, `DictionaryPackUpgrader`)**: Tải & chuẩn hóa `anhviet109K.txt`, đóng gói `dictionary.db` (`32.05 MB`), ưu tiên rank từ CEFR phổ biến, tối ưu truy vấn 3 tầng (`11–29ms`), tự động nâng cấp cho máy cài bản cũ mà bảo toàn `saved_words`/`user_streak_state`.
+- [x] **Bộ Logo, Adaptive Icon & Linh vật Chú Dúi (`res/drawable-nodpi`, `DuiMascotView`)**: Nén 7 tệp WebP tổng `85.6 KB`, Adaptive Icon an toàn không cắt viền (`#0D9488` + `#F59E0B`), `EnziiSplashOverlay`, `MascotMood` (`INQUISITIVE`, `FOCUSED`, `HAPPY`, `SLEEPY`, `SMART`), `MascotLevel` (`BASIC`, `INTERMEDIATE`, `ADVANCED`) và tooltip ngữ cảnh tích hợp tại Splash, Home, Dictionary, Speaking, Shadowing, Recap & Learning Summary.
+- [x] **Tầng dữ liệu Room + Pre-packaged SQLite (`data/local`, `scripts/build_dictionary_db.py`)**: Schema v3 (`113.933` từ, `dictionary_fts` FTS4 + 4 trigger, `word_folders`, `daily_study_logs`, `user_streak_state`, `MIGRATION_1_2`, `MIGRATION_2_3`).
+- [x] **Trang chủ Bento Grid & Hệ thống UI/UX (`feature/home`, `ui/theme`, `ui/components`)**: Light/Dark Mode, Typography rõ cấp bậc, `PosPill`/`CefrPill`/`IpaAudioPill`, Haptic Feedback, Streak Hero + lịch 7 ngày + Freeze + 3 Nhiệm vụ hằng ngày.
+- [x] **Theo dõi Tiến độ, Post-Session Recap & Tổng kết (`LearningProgressRepository`, `feature/progress`)**: Tự động ghi XP/từ/phút từ SRS, Shadowing, Reading và AI Speaking; bảo vệ chuỗi bằng Streak Freeze; màn chúc mừng sau phiên Flashcard & Speaking; `LearningSummaryScreen` (biểu đồ cột 7/30 ngày, số từ thành thạo Mastered, điểm mạnh nhất, từ vựng tiêu biểu tuần).
+- [x] **Tra cứu Từ điển Hybrid (Offline + Online) (`feature/dictionary`, `OnlineDictionaryRepository`) & Tra nhanh (`feature/quicklookup`)**: Tìm kiếm 3 tầng offline (113.933 từ, lemmatization) kết hợp tra cứu trực tuyến qua Free Dictionary API + ML Kit / Gemini AI, tự động lưu cache vào Room để tra lại offline, hỗ trợ nút **"Mở rộng Online"** (Anh–Anh, audio bản xứ `OnlineAudioPlayer`, từ trái nghĩa) và gắn nhãn nguồn `Offline`/`Online`.
 - [x] **Sổ tay Từ vựng, Thư mục `WordFolder` & Flashcard SM-2 (`feature/srs`, `ui/components/SaveToFolderBottomSheet`)**: Room v2 (`word_folders` + `saved_words.folder_id` + `MIGRATION_1_2` an toàn), `SaveToFolderBottomSheet` chọn/tạo nhanh thư mục từ Chi tiết từ & `QuickLookupActivity`, hiển thị trạng thái `Đã lưu • <Thư mục>`, dải thẻ thư mục lọc trực tiếp và ôn Flashcard 3D SM-2 riêng từng chủ đề.
 - [x] **Đọc Song ngữ (`feature/reading`)**: 5 bài đọc A2–C1, ẩn/hiện bản dịch toàn bài & từng đoạn, chạm bất kỳ từ nào mở `ModalBottomSheet` tra từ + nghe UK/US + lưu SRS.
 - [x] **Dịch Hybrid & Cài đặt (`feature/translate`, `feature/settings`)**: ML Kit dịch offline hai chiều + quản lý tải/xóa gói ngôn ngữ, Gemini API phân tích ngữ pháp/idioms/sắc thái từ, mã hóa API Key AES-256, xử lý lỗi thiếu key/mất mạng.
 - [x] **AI Speaking Partner & Lịch sử (`feature/speaking`)**: `LiveAudioManager` (PCM 16kHz + `AcousticEchoCanceler` + `AudioTrack` 24kHz), Gemini Live WebSocket, 5 kịch bản & 3 trình độ, sóng âm động, phụ đề song ngữ, lưu `speaking_sessions`/`speaking_messages`, đánh giá AI sau buổi nói & lưu từ mới vào SRS.
 - [x] **Luyện Shadowing + AI Coach (`feature/shadowing`)**: Tách cụm nhịp (chunks), mở từ Từ điển/Đọc/4 chủ đề mẫu, UK/US `0.75x–1.15x`, Loop, tự động thu sau khi nghe (3-2-1), `MediaRecorder` `.m4a` + đối chiếu `Giọng mẫu ↔ Giọng của bạn`, `SpeechRecognizer` offline + highlight 3 màu từng từ, Gemini phân tích trọng âm/nối âm, lưu lịch sử tiến bộ & từ hay vấp.
 - [x] **Máy ảo Android 14 (`Enzii_Pixel_API34`)**: Đã cài Emulator (WHPX), AVD Pixel 6 (2GB RAM) và tạo [start-emulator.bat](../start-emulator.bat).
-- [x] **Cấu hình Release APK, Keystore, R8/ProGuard & ABI `arm64-v8a`**: `.gitignore` bảo mật secret, `keystore.properties.example`, `app/build.gradle.kts` (`isMinifyEnabled = true`, `isShrinkResources = true`, `abiFilters = ["arm64-v8a"]`), `app/proguard-rules.pro` cho Room/Hilt/ML Kit/Kotlinx Serialization/Tink; `assembleRelease` thành công (~20.1 MB).
+- [x] **Cấu hình Release APK, Keystore, R8/ProGuard & ABI `arm64-v8a`**: `.gitignore` bảo mật secret, `keystore.properties.example`, `app/build.gradle.kts` (`isMinifyEnabled = true`, `isShrinkResources = true`, `abiFilters = ["arm64-v8a"]`), `app/proguard-rules.pro` cho Room/Hilt/ML Kit/Kotlinx Serialization/Tink; `assembleRelease` thành công.
 - [x] **Tự động Cập nhật Trong App (GitHub Releases) & CI/CD Signed Release**: `AppUpdateManager` + `FileProvider` + thẻ cập nhật trong `SettingsScreen` + badge `MainActivity` + workflow `.github/workflows/release-apk.yml` tự tăng `versionCode` và ký bằng `enzii-release.jks` qua GitHub Secrets.
+- [x] **Thông báo Học tập Thông minh (`core/notification`, `WorkManager`)**: Xin quyền `POST_NOTIFICATIONS` trên Android 13+, nhắc học giữ Streak (`DailyStudyReminderWorker` với `TimePickerDialog`), thông báo Từ vựng / Mẫu câu mỗi ngày (`DailyWordNotificationWorker` 1–2 lần/ngày, `BigTextStyle`) kèm nút hành động & Deep Link mở thẳng Từ điển/Flashcard/Shadowing.
 
 ### Bước Tiếp Theo Cần Làm Khi Mở Lại Dự Án (Thứ tự Ưu tiên)
-1. **Kiểm thử thủ công thực tế trên máy ảo & điện thoại thật**:
-   - Chạy `start-emulator.bat` để mở cửa sổ máy ảo `Enzii_Pixel_API34` (đợi vào màn hình chính Android), sau đó cài APK Debug mới nhất bằng:  
-     `& "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" install -r "$env:TEMP\EnziiDictBuild\app\outputs\apk\debug\app-debug.apk"`
-   - Kiểm tra lần lượt: Tra từ offline + `ACTION_PROCESS_TEXT`, Flashcard SM-2 + thư mục tự tạo, Đọc song ngữ chạm từ, Cài đặt tải gói ML Kit + nhập Gemini API Key, AI Speaking (mic/loa/phụ đề/đánh giá sau phiên) và Shadowing (ghi âm/đối chiếu/AI phân tích trọng âm).
-2. **Nạp bộ từ điển lớn thực tế (100k+ mục từ)**:
-   - Chuẩn bị dữ liệu nguồn FVDP (`.dict`) hoặc Wiktionary JSONL, chạy `scripts/build_dictionary_db.py`, tối ưu kích thước `app/src/main/assets/dictionary.db` và đo lại tốc độ truy vấn prefix/FTS4.
-3. **Nhắc học SRS hằng ngày bằng `WorkManager`**:
-   - Triển khai `DailyReminderWorker` kiểm tra số thẻ đến hạn (`next_review_at <= now`), xin quyền `POST_NOTIFICATIONS` (Android 13+) và thêm công tắc bật/tắt giờ nhắc học trong `SettingsScreen`.
-4. **Mở rộng Lịch sử tra cứu & Lịch sử dịch**:
+1. **Kiểm thử thủ công trên máy ảo `Enzii_Pixel_API34` (`emulator-5554`)**:
+   - Đã cài bản Debug mới nhất (`98,801,029` bytes); kiểm tra Adaptive Icon, Splash chú Dúi, kho `113.933` từ (bao gồm tự động nâng cấp dữ liệu giữ nguyên Sổ tay), **Home / Daily Quests / Streak / Tổng kết học tập**, và **Cài đặt → Nhắc nhở & Từ vựng mỗi ngày**.
+2. **Đẩy mã nguồn lên GitHub & phát hành bản cập nhật OTA cho điện thoại thật**:
+   - Chỉ thực hiện sau khi bạn xác nhận đã test ổn trên máy ảo: `git commit` toàn bộ thay đổi local (từ phiên 008 → 012), `git push origin main` và tạo tag Release (`v*`) để GitHub Actions build + ký APK cho điện thoại thật tự tải về qua In-App Update.
+3. **Mở rộng Lịch sử tra cứu & Lịch sử dịch**:
    - Lưu lịch sử tra từ và lịch sử dịch xuống Room để xem lại offline nhanh từ tab Từ điển / Dịch.
-5. **Thêm 4 GitHub Secrets & phát hành bản `v0.2.0` đầu tiên cho In-App Update**:
-   - Chạy `.\scripts\export_keystore_base64.ps1`, dán 4 secret (`ENZII_KEYSTORE_BASE64`, `ENZII_KEYSTORE_PASSWORD`, `ENZII_KEY_ALIAS`, `ENZII_KEY_PASSWORD`) lên GitHub Repository Settings → Secrets and variables → Actions.
-   - Đẩy tag đầu tiên (`git tag v0.2.0; git push origin v0.2.0`) để GitHub Actions tự build & phát hành bản Release đầu tiên.
-   - *(Tùy chọn build local)* Điền mật khẩu thật vào `keystore.properties` và chạy `.\gradlew.bat assembleRelease`.
 
 ---
 

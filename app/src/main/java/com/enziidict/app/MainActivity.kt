@@ -1,5 +1,6 @@
 package com.enziidict.app
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -18,6 +19,7 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Search
@@ -46,23 +48,29 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.enziidict.app.core.database.DictionaryPackUpgrader
 import com.enziidict.app.core.model.SpeakingTopic
 import com.enziidict.app.core.network.AppThemeMode
 import com.enziidict.app.core.network.AppUpdateManager
 import com.enziidict.app.core.network.SettingsDataStore
 import com.enziidict.app.core.network.UpdateCheckOutcome
 import com.enziidict.app.core.network.UserSettings
+import com.enziidict.app.core.notification.EnziiNotificationHelper
 import com.enziidict.app.feature.dictionary.DictionaryScreen
 import com.enziidict.app.feature.home.HomeScreen
+import com.enziidict.app.feature.progress.LearningSummaryScreen
 import com.enziidict.app.feature.reading.ReadingScreen
 import com.enziidict.app.feature.settings.SettingsScreen
 import com.enziidict.app.feature.shadowing.ShadowingItem
+import com.enziidict.app.feature.shadowing.ShadowingPresets
 import com.enziidict.app.feature.shadowing.ShadowingScreen
 import com.enziidict.app.feature.speaking.SpeakingScreen
 import com.enziidict.app.feature.srs.FlashcardScreen
 import com.enziidict.app.feature.translate.TranslateScreen
+import com.enziidict.app.ui.components.EnziiSplashOverlay
 import com.enziidict.app.ui.theme.EnziiDictTheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -83,8 +91,15 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var appUpdateManager: AppUpdateManager
 
+    @Inject
+    lateinit var dictionaryPackUpgrader: DictionaryPackUpgrader
+
+    private val pendingNotificationIntent = MutableStateFlow<Intent?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingNotificationIntent.value = intent
+
         setContent {
             val settings by settingsDataStore.settingsFlow.collectAsStateWithLifecycle(
                 initialValue = UserSettings()
@@ -99,22 +114,64 @@ class MainActivity : ComponentActivity() {
             var hasAppUpdate by remember { mutableStateOf(false) }
 
             LaunchedEffect(Unit) {
+                launch {
+                    dictionaryPackUpgrader.upgradeIfNeeded()
+                }
                 hasAppUpdate = runCatching {
                     appUpdateManager.checkLatestRelease() is UpdateCheckOutcome.UpdateAvailable
                 }.getOrDefault(false)
             }
 
             EnziiDictTheme(darkTheme = isDark) {
+                var showSplash by remember { mutableStateOf(true) }
                 var currentTab by remember { mutableStateOf(MainTab.HOME) }
                 var showSettingsScreen by remember { mutableStateOf(false) }
                 var showReadingScreen by remember { mutableStateOf(false) }
                 var showShadowingScreen by remember { mutableStateOf(false) }
+                var showLearningSummaryScreen by remember { mutableStateOf(false) }
                 var pendingShadowingItem by remember { mutableStateOf<ShadowingItem?>(null) }
                 var pendingSpeakingTopic by remember { mutableStateOf<SpeakingTopic?>(null) }
+                var pendingDictionaryQuery by remember { mutableStateOf<String?>(null) }
+
+                val incomingIntent by pendingNotificationIntent.collectAsStateWithLifecycle()
+                LaunchedEffect(incomingIntent) {
+                    val dest = incomingIntent?.getStringExtra(EnziiNotificationHelper.EXTRA_DEST)
+                    if (!dest.isNullOrBlank()) {
+                        showSplash = false
+                        showSettingsScreen = false
+                        showReadingScreen = false
+                        showLearningSummaryScreen = false
+                        when (dest) {
+                            EnziiNotificationHelper.DEST_SRS -> {
+                                showShadowingScreen = false
+                                currentTab = MainTab.SRS
+                            }
+                            EnziiNotificationHelper.DEST_DICTIONARY_WORD -> {
+                                showShadowingScreen = false
+                                pendingDictionaryQuery = incomingIntent
+                                    ?.getStringExtra(EnziiNotificationHelper.EXTRA_WORD)
+                                    ?.takeIf { it.isNotBlank() }
+                                currentTab = MainTab.DICTIONARY
+                            }
+                            EnziiNotificationHelper.DEST_SHADOWING -> {
+                                val sid = incomingIntent?.getStringExtra(EnziiNotificationHelper.EXTRA_SHADOWING_ID)
+                                pendingShadowingItem = ShadowingPresets.ALL.firstOrNull { it.id == sid }
+                                showShadowingScreen = true
+                            }
+                        }
+                        pendingNotificationIntent.value = null
+                    }
+                }
 
                 when {
+                    showSplash -> {
+                        EnziiSplashOverlay(onFinished = { showSplash = false })
+                    }
                     showSettingsScreen -> {
                         SettingsScreen(onBack = { showSettingsScreen = false })
+                    }
+                    showLearningSummaryScreen -> {
+                        LearningSummaryScreen(onBack = { showLearningSummaryScreen = false })
                     }
                     showShadowingScreen -> {
                         ShadowingScreen(
@@ -146,6 +203,7 @@ class MainActivity : ComponentActivity() {
                             isDark = isDark,
                             hasAppUpdate = hasAppUpdate,
                             onSelectTab = { currentTab = it },
+                            onOpenSummary = { showLearningSummaryScreen = true },
                             onOpenReading = { showReadingScreen = true },
                             onToggleTheme = {
                                 scope.launch {
@@ -177,15 +235,20 @@ class MainActivity : ComponentActivity() {
                                         onOpenShadowing = {
                                             pendingShadowingItem = null
                                             showShadowingScreen = true
-                                        }
+                                        },
+                                        onOpenLearningSummary = { showLearningSummaryScreen = true }
                                     )
                                     MainTab.DICTIONARY -> DictionaryScreen(
+                                        initialQuery = pendingDictionaryQuery,
+                                        onInitialQueryConsumed = { pendingDictionaryQuery = null },
                                         onOpenShadowing = { item ->
                                             pendingShadowingItem = item
                                             showShadowingScreen = true
                                         }
                                     )
-                                    MainTab.SRS -> FlashcardScreen()
+                                    MainTab.SRS -> FlashcardScreen(
+                                        onOpenLearningSummary = { showLearningSummaryScreen = true }
+                                    )
                                     MainTab.TRANSLATE -> TranslateScreen(
                                         onOpenSettings = { showSettingsScreen = true }
                                     )
@@ -202,6 +265,12 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingNotificationIntent.value = intent
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -211,6 +280,7 @@ private fun EnziiMainScaffold(
     isDark: Boolean,
     hasAppUpdate: Boolean,
     onSelectTab: (MainTab) -> Unit,
+    onOpenSummary: () -> Unit,
     onOpenReading: () -> Unit,
     onToggleTheme: () -> Unit,
     onOpenSettings: () -> Unit,
@@ -230,6 +300,9 @@ private fun EnziiMainScaffold(
                     containerColor = MaterialTheme.colorScheme.background
                 ),
                 actions = {
+                    IconButton(onClick = onOpenSummary) {
+                        Icon(Icons.Default.Insights, contentDescription = "Tổng kết học tập")
+                    }
                     IconButton(onClick = onOpenReading) {
                         Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = "Đọc song ngữ")
                     }

@@ -73,6 +73,11 @@ import com.enziidict.app.core.model.AiVoice
 import com.enziidict.app.core.model.SpeakingLevel
 import com.enziidict.app.core.model.SpeakingMode
 import com.enziidict.app.core.model.SpeakingTopic
+import com.enziidict.app.feature.progress.SpeakingRecapDialog
+import com.enziidict.app.ui.components.DuiMascotView
+import com.enziidict.app.ui.components.MascotLevel
+import com.enziidict.app.ui.components.MascotMood
+import com.enziidict.app.ui.components.MascotState
 import com.enziidict.app.ui.components.rememberEnziiHaptics
 import java.util.Locale
 import kotlin.math.abs
@@ -122,6 +127,14 @@ fun SpeakingScreen(
             permissionDeniedMessage =
                 "Cần cấp quyền Micro (RECORD_AUDIO) để trò chuyện trực tiếp với gia sư AI."
         }
+    }
+
+    state.sessionRecap?.let { recap ->
+        SpeakingRecapDialog(
+            recap = recap,
+            onViewAiReview = { viewModel.dismissRecap(openDetailAfter = true) },
+            onDismiss = { viewModel.dismissRecap(openDetailAfter = false) }
+        )
     }
 
     if (state.showHistoryScreen) {
@@ -269,6 +282,24 @@ fun SpeakingScreen(
             }
         }
 
+        val setupMascotLevel = MascotLevel.fromSpeakingLevel(state.selectedLevel)
+        val setupMascotMood = when (state.selectedLevel) {
+            SpeakingLevel.BEGINNER -> MascotMood.INQUISITIVE
+            SpeakingLevel.INTERMEDIATE -> MascotMood.FOCUSED
+            SpeakingLevel.ADVANCED -> MascotMood.SMART
+        }
+        val setupMascotBubble = when (state.selectedLevel) {
+            SpeakingLevel.BEGINNER -> "Trình độ Cơ bản (${state.selectedLevel.cefrHint}): nói chậm rãi, câu ngắn dễ hiểu nhé!"
+            SpeakingLevel.INTERMEDIATE -> "Trình độ Trung cấp (${state.selectedLevel.cefrHint}): chú Dúi sẽ gợi ý nối ý tự nhiên cùng bạn!"
+            SpeakingLevel.ADVANCED -> "Trình độ Nâng cao (${state.selectedLevel.cefrHint}): cùng tranh luận sâu và trau chuốt từ vựng học thuật!"
+        }
+        DuiMascotView(
+            state = MascotState(mood = setupMascotMood, level = setupMascotLevel),
+            size = 64.dp,
+            messageBubble = setupMascotBubble,
+            modifier = Modifier.fillMaxWidth()
+        )
+
         // 3. Giọng AI
         Text("Giọng gia sư AI", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -367,6 +398,14 @@ private fun LiveCallView(
                         fontWeight = FontWeight.Bold
                     )
                 }
+
+                DuiMascotView(
+                    state = MascotState(
+                        mood = MascotMood.FOCUSED,
+                        level = MascotLevel.fromSpeakingLevel(state.selectedLevel)
+                    ),
+                    size = 72.dp
+                )
 
                 Text(
                     text = "${state.selectedTopic.titleVi} • ${state.selectedLevel.titleVi}",

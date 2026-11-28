@@ -47,6 +47,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,8 +67,11 @@ import com.enziidict.app.data.local.entity.WordFolder
 import com.enziidict.app.feature.shadowing.ShadowingItem
 import com.enziidict.app.ui.components.BentoCard
 import com.enziidict.app.ui.components.CefrPill
+import com.enziidict.app.ui.components.DuiMascotView
 import com.enziidict.app.ui.components.EnziiLoadingCard
 import com.enziidict.app.ui.components.IpaAudioPill
+import com.enziidict.app.ui.components.MascotMood
+import com.enziidict.app.ui.components.MascotState
 import com.enziidict.app.ui.components.PosPill
 import com.enziidict.app.ui.components.SaveToFolderBottomSheet
 import com.enziidict.app.ui.components.formatSavedFoldersButtonLabel
@@ -76,12 +80,22 @@ import com.enziidict.app.ui.components.rememberEnziiHaptics
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DictionaryScreen(
+    initialQuery: String? = null,
+    onInitialQueryConsumed: () -> Unit = {},
     onOpenShadowing: (ShadowingItem) -> Unit = {},
     viewModel: DictionaryViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val haptics = rememberEnziiHaptics()
     val lifecycleOwner = LocalLifecycleOwner.current
+
+    LaunchedEffect(initialQuery) {
+        val q = initialQuery?.trim().orEmpty()
+        if (q.isNotEmpty()) {
+            viewModel.onQueryChange(q)
+            onInitialQueryConsumed()
+        }
+    }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -111,7 +125,15 @@ fun DictionaryScreen(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             shape = RoundedCornerShape(20.dp),
-            placeholder = { Text("Tra từ Anh - Việt, cụm từ hoặc gõ tiếng Việt...") },
+            placeholder = {
+                Text(
+                    if (state.dictionaryEntryCount >= 50_000) {
+                        "Tra ${state.dictionaryEntryCount / 1_000}K+ từ Anh – Việt, IPA, gõ tiếng Việt..."
+                    } else {
+                        "Tra từ Anh - Việt, cụm từ hoặc gõ tiếng Việt..."
+                    }
+                )
+            },
             leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             trailingIcon = {
                 if (state.query.isNotEmpty()) {
@@ -129,6 +151,17 @@ fun DictionaryScreen(
                 }
             )
         )
+
+        AnimatedVisibility(
+            visible = state.isUpgradingDictionaryPack,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut()
+        ) {
+            EnziiLoadingCard(
+                message = "Đang nâng cấp kho 100.000+ từ điển offline (giữ nguyên toàn bộ sổ tay)...",
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
 
         AnimatedVisibility(
             visible = state.statusMessage != null,
@@ -156,6 +189,12 @@ fun DictionaryScreen(
                     if (state.isOnlineSearching) {
                         EnziiLoadingCard(message = "Đang tìm trực tuyến cho \"$trimmedQuery\"...")
                     } else {
+                        DuiMascotView(
+                            state = MascotState(mood = MascotMood.INQUISITIVE),
+                            size = 68.dp,
+                            messageBubble = "Chú Dúi chưa thấy \"$trimmedQuery\" trong kho offline — bấm tra trực tuyến nhé!",
+                            modifier = Modifier.fillMaxWidth()
+                        )
                         OnlineSearchPromptCard(
                             query = trimmedQuery,
                             isSearching = false,
@@ -614,6 +653,25 @@ fun WordDetailCard(
 
             onlineError?.let { err ->
                 OnlineErrorBanner(message = err, onRetry = onExpandOnline)
+            }
+
+            if (entry.examples.isNotEmpty() || onlineExpansion != null) {
+                val firstSentence = entry.examples.firstOrNull()?.en
+                    ?: onlineExpansion?.meaningGroups?.firstOrNull()?.definitions?.firstOrNull { it.exampleEn.isNotBlank() }?.exampleEn
+                val firstVi = entry.examples.firstOrNull()?.vi
+                    ?: onlineExpansion?.meaningGroups?.firstOrNull()?.definitions?.firstOrNull { it.exampleEn.isNotBlank() }?.let {
+                        it.exampleVi.ifBlank { it.definitionVi }
+                    }.orEmpty()
+                DuiMascotView(
+                    state = MascotState(mood = MascotMood.INQUISITIVE),
+                    size = 48.dp,
+                    messageBubble = "Nghe phát âm UK/US hoặc thử đọc Shadowing câu ví dụ cùng chú Dúi!",
+                    actionLabel = if (!firstSentence.isNullOrBlank()) "Luyện Shadowing" else null,
+                    onActionClick = if (!firstSentence.isNullOrBlank()) {
+                        { onShadowingSentence(firstSentence, firstVi, entry.word) }
+                    } else null,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             if (entry.examples.isNotEmpty()) {

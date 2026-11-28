@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.enziidict.app.core.audio.OnlineAudioPlayer
 import com.enziidict.app.core.audio.TtsAccent
 import com.enziidict.app.core.audio.TtsManager
+import com.enziidict.app.core.database.DictionaryPackUpgrader
 import com.enziidict.app.core.database.DictionaryRepository
+import com.enziidict.app.core.database.DictionaryUpgradeState
 import com.enziidict.app.core.model.DictionaryEntry
 import com.enziidict.app.core.network.OnlineDictionaryRepository
 import com.enziidict.app.core.network.OnlineLookupOutcome
@@ -43,6 +45,8 @@ data class DictionaryUiState(
     val expandingWordKey: String? = null,
     val onlineExpansions: Map<String, OnlineWordExpansion> = emptyMap(),
     val onlineCachedEntryIds: Set<Long> = emptySet(),
+    val isUpgradingDictionaryPack: Boolean = false,
+    val dictionaryEntryCount: Int = 0,
     val onlineErrorMessage: String? = null,
     val statusMessage: String? = null
 )
@@ -51,6 +55,7 @@ data class DictionaryUiState(
 @HiltViewModel
 class DictionaryViewModel @Inject constructor(
     private val repository: DictionaryRepository,
+    private val dictionaryPackUpgrader: DictionaryPackUpgrader,
     private val onlineDictionaryRepository: OnlineDictionaryRepository,
     private val settingsDataStore: SettingsDataStore,
     private val ttsManager: TtsManager,
@@ -72,19 +77,23 @@ class DictionaryViewModel @Inject constructor(
         baseState,
         repository.observeFoldersWithCounts(),
         savedFoldersFlow,
-        showSaveSheetFlow
-    ) { state, folders, savedFolders, showSheet ->
+        showSaveSheetFlow,
+        dictionaryPackUpgrader.state
+    ) { state, folders, savedFolders, showSheet, upgradeState ->
         state.copy(
             folders = folders,
             savedFoldersForSelected = savedFolders,
-            showSaveFolderSheet = showSheet
+            showSaveFolderSheet = showSheet,
+            isUpgradingDictionaryPack = upgradeState is DictionaryUpgradeState.Upgrading,
+            dictionaryEntryCount = (upgradeState as? DictionaryUpgradeState.Completed)?.totalEntries
+                ?: state.dictionaryEntryCount
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DictionaryUiState())
 
     init {
         viewModelScope.launch {
             queryFlow
-                .debounce(80L)
+                .debounce(130L)
                 .collectLatest { q ->
                     baseState.update { it.copy(isLoading = true) }
                     val found = repository.search(q)
@@ -97,6 +106,21 @@ class DictionaryViewModel @Inject constructor(
                         )
                     }
                 }
+        }
+
+        viewModelScope.launch {
+            dictionaryPackUpgrader.state.collect { upgradeState ->
+                if (upgradeState is DictionaryUpgradeState.Completed) {
+                    val refreshed = repository.search(queryFlow.value)
+                    baseState.update { state ->
+                        state.copy(
+                            entries = refreshed,
+                            selectedEntry = state.selectedEntry?.takeIf { sel -> refreshed.any { it.id == sel.id } }
+                                ?: refreshed.firstOrNull()
+                        )
+                    }
+                }
+            }
         }
     }
 

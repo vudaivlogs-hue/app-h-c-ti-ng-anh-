@@ -21,13 +21,18 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.filled.AcUnit
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.BookmarkAdd
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Hearing
+import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Refresh
@@ -38,6 +43,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -47,16 +53,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.enziidict.app.core.audio.TtsAccent
+import com.enziidict.app.core.database.DailyQuestType
 import com.enziidict.app.core.model.SpeakingTopic
 import com.enziidict.app.ui.components.BentoCard
 import com.enziidict.app.ui.components.CefrPill
+import com.enziidict.app.ui.components.DuiMascotView
 import com.enziidict.app.ui.components.EnziiLoadingCard
 import com.enziidict.app.ui.components.IpaAudioPill
+import com.enziidict.app.ui.components.MascotMood
+import com.enziidict.app.ui.components.MascotState
 import com.enziidict.app.ui.components.PosPill
 import com.enziidict.app.ui.components.rememberEnziiHaptics
 import com.enziidict.app.ui.theme.StreakAmber
@@ -71,6 +83,7 @@ fun HomeScreen(
     onOpenTranslate: () -> Unit,
     onOpenReading: () -> Unit,
     onOpenShadowing: () -> Unit = {},
+    onOpenLearningSummary: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -125,71 +138,301 @@ fun HomeScreen(
             }
         }
 
-        // BENTO ROW 1: Streak Card + SRS Due Today Card
+        if (state.showMascotTip) {
+            DuiMascotView(
+                state = MascotState(mood = MascotMood.INQUISITIVE, level = state.mascotLevel),
+                size = 58.dp,
+                messageBubble = "Mình là chú Dúi! Thử tra 1 từ mới hoặc ôn nhanh vài thẻ SRS để thắp chuỗi Streak hôm nay nhé.",
+                actionLabel = if (state.dueCardsCount > 0) "Ôn ${state.dueCardsCount} thẻ ngay" else "Tra từ ngay",
+                onActionClick = {
+                    viewModel.dismissMascotTip()
+                    if (state.dueCardsCount > 0) onOpenSrs() else onOpenDictionary()
+                },
+                onDismissBubble = viewModel::dismissMascotTip,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        // BENTO STREAK HERO CARD: Streak + 7-Day Calendar + Streak Freeze + Dui Mascot
+        BentoCard(
+            modifier = Modifier.fillMaxWidth(),
+            cornerRadius = 24.dp,
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            onClick = {
+                haptics.lightTap()
+                onOpenLearningSummary()
+            }
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        DuiMascotView(
+                            state = MascotState(
+                                mood = if (state.studiedToday) MascotMood.HAPPY else MascotMood.SLEEPY,
+                                level = state.mascotLevel
+                            ),
+                            size = 66.dp,
+                            onClick = {
+                                haptics.lightTap()
+                                onOpenLearningSummary()
+                            }
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "${state.streakDays} ngày Streak",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                            Text(
+                                text = if (state.studiedToday) {
+                                    "Đã thắp chuỗi hôm nay • ${state.xpToday}/${state.dailyXpGoal} XP"
+                                } else {
+                                    "Chú Dúi đang đợi bạn • ${state.xpToday}/${state.dailyXpGoal} XP"
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.85f)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = Color(0xFFE0F2FE)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.AcUnit,
+                                contentDescription = "Streak Freeze",
+                                tint = Color(0xFF0284C7),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "${state.freezeCount} Freeze",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF0369A1)
+                            )
+                        }
+                    }
+                }
+
+                // Weekly 7-day calendar strip (T2..CN)
+                if (state.weekStrip.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        state.weekStrip.forEach { day ->
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .clip(CircleShape)
+                                        .background(
+                                            when {
+                                                day.isCompleted -> Brush.linearGradient(listOf(StreakAmber, StreakCoral))
+                                                day.isToday -> Brush.linearGradient(
+                                                    listOf(
+                                                        MaterialTheme.colorScheme.surface,
+                                                        MaterialTheme.colorScheme.surface
+                                                    )
+                                                )
+                                                else -> Brush.linearGradient(
+                                                    listOf(
+                                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.45f),
+                                                        MaterialTheme.colorScheme.surface.copy(alpha = 0.45f)
+                                                    )
+                                                )
+                                            }
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (day.isCompleted) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    } else {
+                                        Text(
+                                            text = if (day.isToday) "•" else "",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.ExtraBold,
+                                            color = StreakCoral
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = day.labelVi,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (day.isToday) FontWeight.Bold else FontWeight.Normal,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(
+                                        alpha = if (day.isFuture) 0.5f else 0.9f
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+
+                val dailyGoalProgress = (state.xpToday.toFloat() / state.dailyXpGoal.coerceAtLeast(1).toFloat())
+                    .coerceIn(0f, 1f)
+                LinearProgressIndicator(
+                    progress = { dailyGoalProgress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(50)),
+                    color = StreakCoral,
+                    trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f)
+                )
+            }
+        }
+
+        // BENTO DAILY QUESTS CARD (3 quests)
+        val completedQuests = state.dailyQuests.count { it.isCompleted }
+        BentoCard(
+            modifier = Modifier.fillMaxWidth(),
+            cornerRadius = 24.dp,
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Nhiệm vụ hằng ngày",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = if (completedQuests == state.dailyQuests.size) {
+                            Color(0xFFD5F2DC)
+                        } else {
+                            MaterialTheme.colorScheme.primaryContainer
+                        }
+                    ) {
+                        Text(
+                            text = "$completedQuests / ${state.dailyQuests.size} hoàn thành",
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = if (completedQuests == state.dailyQuests.size) {
+                                Color(0xFF0A4A23)
+                            } else {
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            }
+                        )
+                    }
+                }
+
+                state.dailyQuests.forEach { quest ->
+                    val questIcon = when (quest.type) {
+                        DailyQuestType.SRS_REVIEW -> Icons.Default.Style
+                        DailyQuestType.SHADOWING -> Icons.Default.Hearing
+                        DailyQuestType.SPEAKING -> Icons.Default.Mic
+                    }
+                    Surface(
+                        onClick = {
+                            haptics.lightTap()
+                            when (quest.type) {
+                                DailyQuestType.SRS_REVIEW -> onOpenSrs()
+                                DailyQuestType.SHADOWING -> onOpenShadowing()
+                                DailyQuestType.SPEAKING -> onOpenSpeakingWithTopic(SpeakingTopic.DAILY)
+                            }
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (quest.isCompleted) Icons.Default.CheckCircle else questIcon,
+                                        contentDescription = null,
+                                        tint = if (quest.isCompleted) Color(0xFF16A34A) else MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Text(
+                                        text = quest.title,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Text(
+                                    text = "${quest.current.coerceAtMost(quest.target)}/${quest.target} • +${quest.rewardXp} XP",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (quest.isCompleted) Color(0xFF16A34A) else MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            LinearProgressIndicator(
+                                progress = { quest.progress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(50)),
+                                color = if (quest.isCompleted) Color(0xFF16A34A) else MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surface
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // BENTO ROW 1: SRS Due Today Card + Learning Summary Card
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(IntrinsicSize.Min),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Streak Bento Tile
-            BentoCard(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-                cornerRadius = 22.dp,
-                containerColor = MaterialTheme.colorScheme.tertiaryContainer
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(34.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(
-                                    Brush.linearGradient(listOf(StreakAmber, StreakCoral))
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                Icons.Default.LocalFireDepartment,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "Streak",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text(
-                        text = "${state.streakDays} ngày",
-                        style = MaterialTheme.typography.displaySmall,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer
-                    )
-                    Text(
-                        text = if (state.studiedToday) {
-                            "Tuyệt vời! Đã giữ chuỗi hôm nay"
-                        } else {
-                            "Ôn 1 thẻ để thắp chuỗi hôm nay"
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.85f)
-                    )
-                }
-            }
-
             // SRS Due Today Bento Tile
             BentoCard(
                 modifier = Modifier
@@ -222,7 +465,7 @@ fun HomeScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
 
                     Text(
                         text = "${state.dueCardsCount}",
@@ -233,6 +476,53 @@ fun HomeScreen(
                         text = "thẻ đến hạn • Tổng ${state.totalSavedCount}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
+                    )
+                }
+            }
+
+            // Learning Summary Tile
+            BentoCard(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                cornerRadius = 22.dp,
+                containerColor = MaterialTheme.colorScheme.surface,
+                onClick = {
+                    haptics.lightTap()
+                    onOpenLearningSummary()
+                }
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Insights,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Tổng kết",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Text(
+                        text = "${state.xpToday} XP",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.ExtraBold
+                    )
+                    Text(
+                        text = "Biểu đồ tuần/tháng & Từ thành thạo →",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }

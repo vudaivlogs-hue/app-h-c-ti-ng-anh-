@@ -56,22 +56,22 @@ class OnlineDictionaryRepositoryTest {
 
     @Test
     fun `lookupOnline fetches Free Dictionary word not in offline db, translates via ML Kit fallback, caches to Room, and serves offline next time`() = runTest {
-        // Confirm "serendipity" does not exist in offline seeded DB yet
-        val beforeOffline = dictionaryRepository.search("serendipity")
-        assertTrue(beforeOffline.none { it.word.equals("serendipity", ignoreCase = true) })
+        // Confirm modern neologism "doomscrolling" is not in the 100K+ offline FVDP DB yet
+        val beforeOffline = dictionaryRepository.search("doomscrolling")
+        assertTrue(beforeOffline.none { it.word.equals("doomscrolling", ignoreCase = true) })
 
         val sampleFreeDictResponse = """
             [
               {
-                "word": "serendipity",
+                "word": "doomscrolling",
                 "phonetics": [
                   {
-                    "text": "/ˌsɛɹ.ənˈdɪp.ɪ.ti/",
-                    "audio": "//ssl.gstatic.com/dictionary/static/sounds/20200429/serendipity--_us_1.mp3"
+                    "text": "/ˈduːm.skrəʊ.lɪŋ/",
+                    "audio": "//ssl.gstatic.com/dictionary/static/sounds/20200429/doomscrolling--_us_1.mp3"
                   },
                   {
-                    "text": "/ˌsɛr.ənˈdɪp.ə.ti/",
-                    "audio": "https://api.dictionaryapi.dev/media/pronunciations/en/serendipity-uk.mp3"
+                    "text": "/ˈduːm.skrəʊ.lɪŋ/",
+                    "audio": "https://api.dictionaryapi.dev/media/pronunciations/en/doomscrolling-uk.mp3"
                   }
                 ],
                 "meanings": [
@@ -79,12 +79,12 @@ class OnlineDictionaryRepositoryTest {
                     "partOfSpeech": "noun",
                     "definitions": [
                       {
-                        "definition": "The occurrence and development of events by chance in a happy or beneficial way.",
-                        "example": "A fortunate stroke of serendipity brought the two founders together."
+                        "definition": "The practice of obsessively reading bad news online.",
+                        "example": "Late-night doomscrolling can hurt your sleep quality."
                       }
                     ],
-                    "synonyms": ["fortune", "luck"],
-                    "antonyms": ["misfortune"]
+                    "synonyms": ["news binge"],
+                    "antonyms": ["digital detox"]
                   }
                 ]
               }
@@ -99,29 +99,29 @@ class OnlineDictionaryRepositoryTest {
             getExecutor = { HttpPostResponse(200, sampleFreeDictResponse) },
             geminiPostExecutor = { _, _ -> HttpPostResponse(500, "") },
             mlKitTranslate = { source ->
-                if (source.contains("occurrence", ignoreCase = true)) {
-                    Result.success("Sự tình cờ may mắn mang lại kết quả tốt đẹp.")
+                if (source.contains("obsessively", ignoreCase = true)) {
+                    Result.success("Thói quen lướt đọc tin tiêu cực liên tục trên mạng.")
                 } else {
-                    Result.success("Một cơ duyên may mắn đã đưa hai nhà sáng lập đến với nhau.")
+                    Result.success("Việc lướt tin xấu vào ban đêm có thể ảnh hưởng giấc ngủ.")
                 }
             }
         )
 
-        val outcome = onlineRepo.lookupOnline("serendipity")
+        val outcome = onlineRepo.lookupOnline("doomscrolling")
         assertTrue("Expected Success, got $outcome", outcome is OnlineLookupOutcome.Success)
         val success = outcome as OnlineLookupOutcome.Success
 
         assertTrue(success.newlyCached)
         assertTrue(success.entry.id > 0L)
-        assertEquals("serendipity", success.entry.word)
-        assertEquals("Sự tình cờ may mắn mang lại kết quả tốt đẹp.", success.entry.meaningVi)
-        assertEquals("https://ssl.gstatic.com/dictionary/static/sounds/20200429/serendipity--_us_1.mp3", success.expansion.audioUrlUs)
-        assertEquals("https://api.dictionaryapi.dev/media/pronunciations/en/serendipity-uk.mp3", success.expansion.audioUrlUk)
-        assertEquals(listOf("misfortune"), success.expansion.antonyms)
+        assertEquals("doomscrolling", success.entry.word)
+        assertEquals("Thói quen lướt đọc tin tiêu cực liên tục trên mạng.", success.entry.meaningVi)
+        assertEquals("https://ssl.gstatic.com/dictionary/static/sounds/20200429/doomscrolling--_us_1.mp3", success.expansion.audioUrlUs)
+        assertEquals("https://api.dictionaryapi.dev/media/pronunciations/en/doomscrolling-uk.mp3", success.expansion.audioUrlUk)
+        assertEquals(listOf("digital detox"), success.expansion.antonyms)
 
         // Verify cached entry is now immediately searchable offline & saveable to a WordFolder
-        val afterOffline = dictionaryRepository.search("serendipity")
-        val cached = afterOffline.firstOrNull { it.word.equals("serendipity", ignoreCase = true) }
+        val afterOffline = dictionaryRepository.search("doomscrolling")
+        val cached = afterOffline.firstOrNull { it.word.equals("doomscrolling", ignoreCase = true) }
         assertTrue("Cached online word must be found offline afterwards", cached != null)
         assertTrue(dictionaryRepository.saveToDefaultWordbook(cached!!.id))
     }

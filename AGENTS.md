@@ -35,3 +35,6 @@ Tài liệu này định nghĩa các quy tắc làm việc bắt buộc cho AI A
   - Mọi màn hình dùng micro, loa hoặc WebSocket (`SpeakingScreen`, `ShadowingScreen`) phải giải phóng tài nguyên ở cả `DisposableEffect` (`ON_STOP` & `onDispose`) và `ViewModel.onCleared()`.
 - **Kiểm chứng trước khi báo hoàn tất**:
   - Sau mỗi đợt thay đổi mã nguồn, chạy `.\gradlew.bat testDebugUnitTest assembleDebug --no-daemon --console=plain` và báo đúng kết quả kiểm thử thực tế.
+- **Quy trình Git & Phát hành Bản cập nhật (Bắt buộc)**:
+  - **Không tự động commit, push lên GitHub hoặc tạo/đẩy tag Release** sau khi chỉnh sửa code.
+  - Chỉ xây bản Debug local để người dùng test trên máy ảo Android trước; chỉ thực hiện `git commit`, `git push origin main` và tạo tag Release (`v*`) cập nhật cho điện thoại thật **sau khi người dùng xác nhận đã test ổn và yêu cầu đẩy lên**.

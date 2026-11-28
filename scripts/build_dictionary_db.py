@@ -25,6 +25,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 OUTPUT_DB = ROOT_DIR / "app" / "src" / "main" / "assets" / "dictionary.db"
 SEED_DICT_PATH = ROOT_DIR / "tools" / "dict-builder" / "seed_dictionary.json"
 SEED_ARTICLES_PATH = ROOT_DIR / "tools" / "dict-builder" / "seed_articles.json"
+DEFAULT_FVDP_PATH = ROOT_DIR / "tools" / "dict-builder" / "anhviet109K.txt"
 
 SCHEMA_SQL = """
 CREATE TABLE dictionary_entries (
@@ -159,6 +160,27 @@ CREATE TABLE bilingual_articles (
 
 CREATE INDEX idx_articles_level
 ON bilingual_articles (cefr_level, updated_at);
+
+CREATE TABLE daily_study_logs (
+    date_yyyy_mm_dd TEXT NOT NULL,
+    words_reviewed INTEGER NOT NULL,
+    words_learned INTEGER NOT NULL,
+    speaking_minutes INTEGER NOT NULL,
+    shadowing_count INTEGER NOT NULL,
+    xp_earned INTEGER NOT NULL,
+    goal_completed INTEGER NOT NULL,
+    PRIMARY KEY(date_yyyy_mm_dd)
+);
+
+CREATE TABLE user_streak_state (
+    id INTEGER NOT NULL,
+    current_streak INTEGER NOT NULL,
+    longest_streak INTEGER NOT NULL,
+    freeze_count INTEGER NOT NULL,
+    last_active_date TEXT,
+    daily_xp_goal INTEGER NOT NULL,
+    PRIMARY KEY(id)
+);
 """
 
 # ~460+ common English words (paired with 40 curated entries -> ~500 total entries)
@@ -1172,8 +1194,36 @@ COMMON_WORDS: list[tuple[str, str, str, str, str]] = [
 ]
 
 
+def normalize_fvdp_pos(raw_pos: str, word: str) -> str:
+    lowered = raw_pos.strip().lower()
+    mappings = (
+        ("thành ngữ", "idiom"),
+        ("cụm động từ", "phrasal verb"),
+        ("ngoại động từ", "verb"),
+        ("nội động từ", "verb"),
+        ("trợ động từ", "verb"),
+        ("động từ", "verb"),
+        ("danh từ", "noun"),
+        ("tính từ", "adjective"),
+        ("phó từ", "adverb"),
+        ("trạng từ", "adverb"),
+        ("giới từ", "preposition"),
+        ("liên từ", "conjunction"),
+        ("đại từ", "pronoun"),
+        ("thán từ", "interjection"),
+        ("mạo từ", "determiner"),
+        ("số từ", "number"),
+        ("tiền tố", "prefix"),
+        ("hậu tố", "suffix"),
+    )
+    for vn_tag, en_pos in mappings:
+        if vn_tag in lowered:
+            return en_pos
+    return "phrase" if " " in word else "noun"
+
+
 def parse_fvdp(path: Path) -> list[dict[str, Any]]:
-    """Parse Free Vietnamese Dictionary Project (.dict) plain text entries."""
+    """Parse Free Vietnamese Dictionary Project (.dict/.txt) entries."""
     entries: list[dict[str, Any]] = []
     if not path.exists():
         return entries
@@ -1183,55 +1233,79 @@ def parse_fvdp(path: Path) -> list[dict[str, Any]]:
     current_pos = "noun"
     meanings: list[str] = []
     examples: list[dict[str, str]] = []
+    collocations: list[dict[str, str]] = []
+
+    def compute_fvdp_rank(word: str) -> int:
+        if " " not in word and word.isalpha():
+            return 5000 + min(len(word), 20) * 150
+        return 15000 + min(len(word), 30) * 100
 
     def flush() -> None:
-        if current_word and meanings:
-            entries.append(
-                {
-                    "word": current_word,
-                    "ipa_uk": current_ipa,
-                    "ipa_us": current_ipa,
-                    "pos": current_pos,
-                    "meaning_vi": "; ".join(meanings[:4]),
-                    "examples": examples[:3],
-                    "synonyms": [],
-                    "collocations": [],
-                    "cefr_level": None,
-                    "frequency_rank": 10000,
-                }
-            )
+        if not current_word or current_word.startswith("00-database") or not meanings:
+            return
+        joined_vi = "; ".join(meanings[:4])
+        if len(joined_vi) > 240:
+            joined_vi = joined_vi[:237].rstrip(" ;,") + "..."
+        entries.append(
+            {
+                "word": current_word,
+                "ipa_uk": current_ipa,
+                "ipa_us": current_ipa,
+                "pos": current_pos,
+                "meaning_vi": joined_vi,
+                "examples": examples[:2],
+                "synonyms": [],
+                "collocations": collocations[:3],
+                "cefr_level": None,
+                "frequency_rank": compute_fvdp_rank(current_word),
+            }
+        )
 
-    for raw_line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
-        line = raw_line.strip()
-        if not line:
-            flush()
-            current_word = ""
-            current_ipa = ""
-            current_pos = "noun"
-            meanings = []
-            examples = []
-            continue
-        if line.startswith("@"):
-            flush()
-            meanings = []
-            examples = []
-            match = re.match(r"^@([^/]+?)\s*(/[^/]+/)?$", line)
-            if match:
-                current_word = match.group(1).strip()
-                current_ipa = (match.group(2) or "").strip()
-            else:
-                current_word = line[1:].strip()
+    with path.open("r", encoding="utf-8", errors="ignore") as fh:
+        for raw_line in fh:
+            line = raw_line.strip()
+            if not line:
+                flush()
+                current_word = ""
                 current_ipa = ""
-        elif line.startswith("*"):
-            current_pos = line[1:].strip().lower() or "noun"
-        elif line.startswith("-"):
-            meanings.append(line[1:].strip())
-        elif line.startswith("="):
-            parts = line[1:].split("+", 1)
-            en = parts[0].strip()
-            vi = parts[1].strip() if len(parts) > 1 else ""
-            if en:
-                examples.append({"en": en, "vi": vi})
+                current_pos = "noun"
+                meanings = []
+                examples = []
+                collocations = []
+                continue
+            if line.startswith("@"):
+                flush()
+                meanings = []
+                examples = []
+                collocations = []
+                match = re.match(r"^@([^/]+?)\s*(/[^/]+/)?$", line)
+                if match:
+                    current_word = re.sub(r"\s+", " ", match.group(1)).strip()
+                    current_ipa = (match.group(2) or "").strip()
+                else:
+                    current_word = re.sub(r"\s+", " ", line[1:]).strip()
+                    current_ipa = ""
+                current_pos = normalize_fvdp_pos("", current_word)
+            elif line.startswith("*"):
+                if meanings:
+                    flush()
+                    meanings = []
+                    examples = []
+                current_pos = normalize_fvdp_pos(line[1:], current_word)
+            elif line.startswith("-"):
+                m = line[1:].strip()
+                if m:
+                    meanings.append(m)
+            elif line.startswith("="):
+                parts = line[1:].split("+", 1)
+                en = parts[0].replace("_", " ").strip()
+                vi = parts[1].strip() if len(parts) > 1 else ""
+                if en:
+                    examples.append({"en": en, "vi": vi})
+            elif line.startswith("!"):
+                idiom_text = line[1:].strip()
+                if idiom_text:
+                    collocations.append({"phrase": idiom_text, "meaningVi": ""})
 
     flush()
     return entries
@@ -1344,16 +1418,35 @@ def build_seed_entries() -> list[dict[str, Any]]:
     return entries
 
 
-def build_database(fvdp_path: Path | None, wiktionary_path: Path | None) -> None:
+def build_database(fvdp_path: Path | None, wiktionary_path: Path | None, use_default_fvdp: bool = True) -> None:
     OUTPUT_DB.parent.mkdir(parents=True, exist_ok=True)
     if OUTPUT_DB.exists():
         OUTPUT_DB.unlink()
 
-    all_entries = build_seed_entries()
-    if fvdp_path:
-        all_entries.extend(parse_fvdp(fvdp_path))
+    raw_entries = build_seed_entries()
+    resolved_fvdp = fvdp_path or (DEFAULT_FVDP_PATH if use_default_fvdp and DEFAULT_FVDP_PATH.exists() else None)
+    if resolved_fvdp:
+        fvdp_entries = parse_fvdp(resolved_fvdp)
+        print(f"Parsed {len(fvdp_entries):,} entries from FVDP: {resolved_fvdp}")
+        raw_entries.extend(fvdp_entries)
     if wiktionary_path:
-        all_entries.extend(parse_wiktionary_jsonl(wiktionary_path))
+        raw_entries.extend(parse_wiktionary_jsonl(wiktionary_path))
+
+    # Deduplicate by (word_normalized, pos), preserving earlier higher-priority seed entries
+    all_entries: list[dict[str, Any]] = []
+    seen_keys: set[tuple[str, str]] = set()
+    for item in raw_entries:
+        word = item.get("word", "").strip()
+        pos = item.get("pos", "noun").strip().lower() or "noun"
+        if not word:
+            continue
+        key = (word.lower(), pos)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        item["word"] = word
+        item["pos"] = pos
+        all_entries.append(item)
 
     articles = (
         json.loads(SEED_ARTICLES_PATH.read_text(encoding="utf-8"))
@@ -1364,33 +1457,50 @@ def build_database(fvdp_path: Path | None, wiktionary_path: Path | None) -> None
 
     conn = sqlite3.connect(str(OUTPUT_DB))
     try:
+        conn.execute("PRAGMA page_size = 4096")
+        conn.execute("PRAGMA synchronous = OFF")
+        conn.execute("PRAGMA journal_mode = MEMORY")
         conn.executescript(SCHEMA_SQL)
 
-        for item in all_entries:
-            word = item["word"].strip()
-            conn.execute(
-                """
-                INSERT INTO dictionary_entries (
-                    word, word_normalized, ipa_uk, ipa_us, pos, meaning_vi,
-                    examples_json, synonyms_json, collocations_json, cefr_level, frequency_rank
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    word,
-                    word.lower(),
-                    item.get("ipa_uk", ""),
-                    item.get("ipa_us", ""),
-                    item["pos"],
-                    item["meaning_vi"],
-                    json.dumps(item.get("examples", []), ensure_ascii=False),
-                    json.dumps(item.get("synonyms", []), ensure_ascii=False),
-                    json.dumps(item.get("collocations", []), ensure_ascii=False),
-                    item.get("cefr_level"),
-                    int(item.get("frequency_rank", 999999)),
-                ),
+        # Drop AFTER_INSERT trigger during bulk load, rebuild FTS once, then restore trigger
+        conn.execute("DROP TRIGGER IF EXISTS room_fts_content_sync_dictionary_fts_AFTER_INSERT")
+
+        rows_to_insert = [
+            (
+                item["word"],
+                item["word"].lower(),
+                item.get("ipa_uk", ""),
+                item.get("ipa_us", ""),
+                item["pos"],
+                item["meaning_vi"],
+                json.dumps(item.get("examples", []), ensure_ascii=False),
+                json.dumps(item.get("synonyms", []), ensure_ascii=False),
+                json.dumps(item.get("collocations", []), ensure_ascii=False),
+                item.get("cefr_level"),
+                int(item.get("frequency_rank", 999999)),
             )
+            for item in all_entries
+        ]
+        conn.executemany(
+            """
+            INSERT INTO dictionary_entries (
+                word, word_normalized, ipa_uk, ipa_us, pos, meaning_vi,
+                examples_json, synonyms_json, collocations_json, cefr_level, frequency_rank
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            rows_to_insert,
+        )
 
         conn.execute("INSERT INTO dictionary_fts(dictionary_fts) VALUES('rebuild')")
+        conn.execute(
+            """
+            CREATE TRIGGER IF NOT EXISTS room_fts_content_sync_dictionary_fts_AFTER_INSERT
+            AFTER INSERT ON `dictionary_entries` BEGIN
+                INSERT INTO `dictionary_fts`(`docid`, `word`, `meaning_vi`, `collocations_json`, `synonyms_json`)
+                VALUES (NEW.`rowid`, NEW.`word`, NEW.`meaning_vi`, NEW.`collocations_json`, NEW.`synonyms_json`);
+            END
+            """
+        )
 
         preset_folders = [
             ("Mặc định", "folder", "#1D4ED8", now_ms),
@@ -1452,6 +1562,14 @@ def build_database(fvdp_path: Path | None, wiktionary_path: Path | None) -> None
                 ),
             )
 
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO user_streak_state (
+                id, current_streak, longest_streak, freeze_count, last_active_date, daily_xp_goal
+            ) VALUES (1, 0, 0, 1, NULL, 50)
+            """
+        )
+
         conn.commit()
         conn.execute("ANALYZE")
         conn.execute("VACUUM")
@@ -1462,10 +1580,11 @@ def build_database(fvdp_path: Path | None, wiktionary_path: Path | None) -> None
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build Enzii Dict offline SQLite database.")
-    parser.add_argument("--fvdp", type=Path, default=None, help="Optional FVDP .dict file path")
+    parser.add_argument("--fvdp", type=Path, default=None, help="Optional FVDP .dict/.txt file path")
+    parser.add_argument("--no-fvdp", action="store_true", help="Build compact seed database without FVDP 109K")
     parser.add_argument("--wiktionary", type=Path, default=None, help="Optional Wiktionary JSONL file path")
     args = parser.parse_args()
-    build_database(args.fvdp, args.wiktionary)
+    build_database(args.fvdp, args.wiktionary, use_default_fvdp=not args.no_fvdp)
 
 
 if __name__ == "__main__":

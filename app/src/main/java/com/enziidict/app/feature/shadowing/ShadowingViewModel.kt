@@ -9,6 +9,7 @@ import com.enziidict.app.core.audio.ShadowingSpeechRecognizer
 import com.enziidict.app.core.audio.TtsAccent
 import com.enziidict.app.core.audio.TtsManager
 import com.enziidict.app.core.database.DictionaryRepository
+import com.enziidict.app.core.database.LearningProgressRepository
 import com.enziidict.app.core.network.GeminiModelPresets
 import com.enziidict.app.core.network.GeminiShadowingCoachService
 import com.enziidict.app.core.network.SecureApiKeyStore
@@ -68,6 +69,7 @@ class ShadowingViewModel @Inject constructor(
     private val historyStore: ShadowingHistoryStore,
     private val secureApiKeyStore: SecureApiKeyStore,
     private val dictionaryRepository: DictionaryRepository,
+    private val progressRepository: LearningProgressRepository,
     private val settingsDataStore: SettingsDataStore
 ) : ViewModel() {
 
@@ -393,7 +395,9 @@ class ShadowingViewModel @Inject constructor(
                     score = detailed.scorePercent,
                     trickyWords = detailed.trickyWords
                 )
-                viewModelScope.launch { settingsDataStore.recordStudyActivity() }
+                viewModelScope.launch {
+                    progressRepository.recordShadowingCompleted(detailed.scorePercent)
+                }
 
                 val apiKey = secureApiKeyStore.getApiKey()
                 if (apiKey.isNotBlank()) {
@@ -402,7 +406,8 @@ class ShadowingViewModel @Inject constructor(
                         item = currentItem,
                         spokenTranscript = spoken,
                         audioFile = null,
-                        offlineScoreFallback = detailed
+                        offlineScoreFallback = detailed,
+                        alreadyLoggedProgress = true
                     )
                 } else {
                     aiFeedbackFlow.value = null
@@ -443,7 +448,8 @@ class ShadowingViewModel @Inject constructor(
         item: ShadowingItem,
         spokenTranscript: String?,
         audioFile: File?,
-        offlineScoreFallback: DetailedPronunciationResult?
+        offlineScoreFallback: DetailedPronunciationResult?,
+        alreadyLoggedProgress: Boolean = false
     ) {
         viewModelScope.launch {
             isEvaluatingAiFlow.value = true
@@ -479,7 +485,9 @@ class ShadowingViewModel @Inject constructor(
                         score = fb.fluencyScore,
                         trickyWords = detailed?.trickyWords ?: emptyList()
                     )
-                    settingsDataStore.recordStudyActivity()
+                    if (!alreadyLoggedProgress) {
+                        progressRepository.recordShadowingCompleted(fb.fluencyScore)
+                    }
                     statusFlow.value = "AI đánh giá xong: ${fb.fluencyScore}/100 (đã lưu lịch sử)."
                 }
                 is ShadowingAiOutcome.OfflineFallback -> {
@@ -590,7 +598,9 @@ class ShadowingViewModel @Inject constructor(
                 meaningVi = item.meaningVi,
                 folderName = folderName
             )
-            settingsDataStore.recordStudyActivity()
+            if (inserted) {
+                progressRepository.recordWordSaved()
+            }
             statusFlow.value = if (inserted) {
                 "Đã lưu \"$phraseKey\" vào Sổ tay SRS ($folderName)"
             } else {

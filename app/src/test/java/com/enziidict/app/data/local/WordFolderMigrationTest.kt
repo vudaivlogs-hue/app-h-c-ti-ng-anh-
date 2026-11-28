@@ -160,9 +160,12 @@ class WordFolderMigrationTest {
             sqlite.version = 1
         }
 
-        // 2. Open via Room v2 with MIGRATION_1_2 (validates full Room v2 schema)
+        // 2. Open via Room v3 with MIGRATION_1_2 + MIGRATION_2_3 (validates full Room v3 schema)
         val migratedDb = Room.databaseBuilder(context, EnziiDatabase::class.java, dbName)
-            .addMigrations(EnziiDatabaseMigrations.MIGRATION_1_2)
+            .addMigrations(
+                EnziiDatabaseMigrations.MIGRATION_1_2,
+                EnziiDatabaseMigrations.MIGRATION_2_3
+            )
             .allowMainThreadQueries()
             .build()
 

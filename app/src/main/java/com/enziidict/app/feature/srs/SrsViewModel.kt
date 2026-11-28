@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.enziidict.app.core.audio.TtsAccent
 import com.enziidict.app.core.audio.TtsManager
 import com.enziidict.app.core.database.DictionaryRepository
+import com.enziidict.app.core.database.LearningProgressRepository
 import com.enziidict.app.core.model.CollocationItem
 import com.enziidict.app.core.model.ExampleItem
 import com.enziidict.app.core.model.ReviewGrade
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
+import kotlin.math.roundToInt
 
 data class WordFolderUi(
     val id: Long,
@@ -44,6 +46,17 @@ data class FlashcardCardUi(
     val intervalPreviews: Map<ReviewGrade, String>
 )
 
+data class SrsSessionRecapUi(
+    val reviewedCount: Int,
+    val accurateCount: Int,
+    val accuracyPercent: Int,
+    val xpEarned: Int,
+    val streakAfter: Int,
+    val streakIncreased: Boolean,
+    val freezeUsedCount: Int,
+    val goalJustCompleted: Boolean
+)
+
 data class SrsUiState(
     val folders: List<WordFolderUi> = emptyList(),
     val totalCards: Int = 0,
@@ -56,6 +69,7 @@ data class SrsUiState(
     val sessionTotal: Int = 0,
     val reviewedCount: Int = 0,
     val sessionCompleted: Boolean = false,
+    val sessionRecap: SrsSessionRecapUi? = null,
     val statusMessage: String? = null
 )
 
@@ -65,7 +79,7 @@ class SrsViewModel @Inject constructor(
     private val wordFolderDao: WordFolderDao,
     private val savedWordDao: SavedWordDao,
     private val dictionaryRepository: DictionaryRepository,
-    private val settingsDataStore: SettingsDataStore,
+    private val progressRepository: LearningProgressRepository,
     private val ttsManager: TtsManager,
     private val json: Json
 ) : ViewModel() {
@@ -78,7 +92,15 @@ class SrsViewModel @Inject constructor(
     private val sessionTotalFlow = MutableStateFlow(0)
     private val reviewedCountFlow = MutableStateFlow(0)
     private val sessionCompletedFlow = MutableStateFlow(false)
+    private val sessionRecapFlow = MutableStateFlow<SrsSessionRecapUi?>(null)
     private val statusMessageFlow = MutableStateFlow<String?>(null)
+
+    private var sessionAccurateCount = 0
+    private var sessionXpEarned = 0
+    private var sessionStreakAfter = 0
+    private var sessionStreakIncreased = false
+    private var sessionFreezeUsed = 0
+    private var sessionGoalJustCompleted = false
 
     private val foldersFlow = refreshTick.flatMapLatest { now ->
         wordFolderDao.observeFoldersWithCounts(now + 60_000L)
@@ -120,6 +142,7 @@ class SrsViewModel @Inject constructor(
         sessionTotalFlow,
         reviewedCountFlow,
         sessionCompletedFlow,
+        sessionRecapFlow,
         statusMessageFlow
     ) { values ->
         @Suppress("UNCHECKED_CAST")
@@ -136,7 +159,8 @@ class SrsViewModel @Inject constructor(
         val sessionTotal = values[8] as Int
         val reviewedCount = values[9] as Int
         val sessionCompleted = values[10] as Boolean
-        val statusMsg = values[11] as String?
+        val sessionRecap = values[11] as SrsSessionRecapUi?
+        val statusMsg = values[12] as String?
 
         val head = queue.firstOrNull()
         val cardUi = head?.let { toFlashcardCardUi(it) }
@@ -153,6 +177,7 @@ class SrsViewModel @Inject constructor(
             sessionTotal = sessionTotal,
             reviewedCount = reviewedCount,
             sessionCompleted = sessionCompleted,
+            sessionRecap = sessionRecap,
             statusMessage = statusMsg
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SrsUiState())
@@ -182,11 +207,19 @@ class SrsViewModel @Inject constructor(
                 return@launch
             }
 
+            sessionAccurateCount = 0
+            sessionXpEarned = 0
+            sessionStreakAfter = 0
+            sessionStreakIncreased = false
+            sessionFreezeUsed = 0
+            sessionGoalJustCompleted = false
+
             activeReviewTitleFlow.value = folder?.name ?: "Tất cả đến hạn"
             reviewQueueFlow.value = due
             sessionTotalFlow.value = due.size
             reviewedCountFlow.value = 0
             sessionCompletedFlow.value = false
+            sessionRecapFlow.value = null
             isFlippedFlow.value = false
             statusMessageFlow.value = null
         }
@@ -197,6 +230,7 @@ class SrsViewModel @Inject constructor(
         activeReviewTitleFlow.value = null
         isFlippedFlow.value = false
         sessionCompletedFlow.value = false
+        sessionRecapFlow.value = null
         refreshTick.value = System.currentTimeMillis()
     }
 
@@ -232,15 +266,44 @@ class SrsViewModel @Inject constructor(
                     lastReviewedAt = now
                 )
             )
-            settingsDataStore.recordStudyActivity()
+
+            val isAccurate = grade != ReviewGrade.AGAIN
+            val isFirstTimeLearned = current.savedWord.repetitions == 0 && isAccurate
+            val award = progressRepository.recordFlashcardReview(
+                isAccurate = isAccurate,
+                isFirstTimeLearned = isFirstTimeLearned
+            )
+
+            if (isAccurate) sessionAccurateCount += 1
+            sessionXpEarned += award.xpAdded
+            sessionStreakAfter = award.streakAfter
+            if (award.streakIncreased) sessionStreakIncreased = true
+            sessionFreezeUsed += award.freezeUsedCount
+            if (award.goalJustCompleted) sessionGoalJustCompleted = true
 
             val remaining = reviewQueueFlow.value.drop(1)
-            reviewedCountFlow.value += 1
+            val newReviewedCount = reviewedCountFlow.value + 1
+            reviewedCountFlow.value = newReviewedCount
             reviewQueueFlow.value = remaining
             isFlippedFlow.value = false
             refreshTick.value = System.currentTimeMillis()
 
             if (remaining.isEmpty()) {
+                val accuracy = if (newReviewedCount > 0) {
+                    ((sessionAccurateCount * 100f) / newReviewedCount.toFloat()).roundToInt().coerceIn(0, 100)
+                } else {
+                    0
+                }
+                sessionRecapFlow.value = SrsSessionRecapUi(
+                    reviewedCount = newReviewedCount,
+                    accurateCount = sessionAccurateCount,
+                    accuracyPercent = accuracy,
+                    xpEarned = sessionXpEarned,
+                    streakAfter = sessionStreakAfter,
+                    streakIncreased = sessionStreakIncreased,
+                    freezeUsedCount = sessionFreezeUsed,
+                    goalJustCompleted = sessionGoalJustCompleted
+                )
                 sessionCompletedFlow.value = true
             }
         }

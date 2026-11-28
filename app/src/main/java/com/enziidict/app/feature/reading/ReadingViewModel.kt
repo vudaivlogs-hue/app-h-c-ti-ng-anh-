@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.enziidict.app.core.audio.TtsAccent
 import com.enziidict.app.core.audio.TtsManager
 import com.enziidict.app.core.database.DictionaryRepository
+import com.enziidict.app.core.database.LearningProgressRepository
 import com.enziidict.app.core.model.BilingualParagraph
 import com.enziidict.app.core.model.DictionaryEntry
 import com.enziidict.app.core.model.WordFolders
@@ -55,10 +56,12 @@ class ReadingViewModel @Inject constructor(
     private val readingDao: ReadingDao,
     private val dictionaryRepository: DictionaryRepository,
     wordFolderDao: WordFolderDao,
-    private val settingsDataStore: SettingsDataStore,
+    private val progressRepository: LearningProgressRepository,
     private val json: Json,
     private val ttsManager: TtsManager
 ) : ViewModel() {
+
+    private val completedArticlesThisSession = mutableSetOf<Long>()
 
     private val selectedLevelFlow = MutableStateFlow<String?>(null)
     private val activeArticleIdFlow = MutableStateFlow<Long?>(null)
@@ -156,8 +159,8 @@ class ReadingViewModel @Inject constructor(
                 progress = progress.coerceIn(0f, 1f),
                 updatedAt = System.currentTimeMillis()
             )
-            if (progress >= 1f) {
-                settingsDataStore.recordStudyActivity()
+            if (progress >= 1f && completedArticlesThisSession.add(articleId)) {
+                progressRepository.recordReadingCompleted()
             }
         }
     }
@@ -194,7 +197,9 @@ class ReadingViewModel @Inject constructor(
         val folder = current.selectedFolder
         viewModelScope.launch {
             val inserted = dictionaryRepository.saveToFolder(entry.id, folder)
-            settingsDataStore.recordStudyActivity()
+            if (inserted) {
+                progressRepository.recordWordSaved()
+            }
             lookupSheetFlow.value = current.copy(
                 saveStatusMessage = if (inserted) {
                     "Đã lưu \"${entry.word}\" vào thư mục \"$folder\""

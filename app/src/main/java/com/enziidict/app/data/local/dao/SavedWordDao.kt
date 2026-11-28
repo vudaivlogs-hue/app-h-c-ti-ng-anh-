@@ -47,6 +47,33 @@ interface SavedWordDao {
     @Query("SELECT COUNT(*) FROM saved_words")
     fun observeTotalCount(): Flow<Int>
 
+    @Query("SELECT COUNT(*) FROM saved_words WHERE repetitions >= 3 AND interval_days >= 7")
+    fun observeMasteredCount(): Flow<Int>
+
+    @Query(
+        """
+        SELECT s.*,
+            d.id AS dict_id,
+            d.word AS dict_word,
+            d.word_normalized AS dict_word_normalized,
+            d.ipa_uk AS dict_ipa_uk,
+            d.ipa_us AS dict_ipa_us,
+            d.pos AS dict_pos,
+            d.meaning_vi AS dict_meaning_vi,
+            d.examples_json AS dict_examples_json,
+            d.synonyms_json AS dict_synonyms_json,
+            d.collocations_json AS dict_collocations_json,
+            d.cefr_level AS dict_cefr_level,
+            d.frequency_rank AS dict_frequency_rank
+        FROM saved_words s
+        INNER JOIN dictionary_entries d ON s.entry_id = d.id
+        WHERE COALESCE(s.last_reviewed_at, s.created_at) >= :sinceMillis
+        ORDER BY COALESCE(s.last_reviewed_at, s.created_at) DESC
+        LIMIT :limit
+        """
+    )
+    fun observeRecentlyStudiedWords(sinceMillis: Long, limit: Int = 10): Flow<List<SavedWordWithEntry>>
+
     @Query(
         """
         SELECT f.*

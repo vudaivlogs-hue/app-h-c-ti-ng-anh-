@@ -6,6 +6,7 @@ import com.enziidict.app.core.audio.LiveAudioManager
 import com.enziidict.app.core.audio.TtsAccent
 import com.enziidict.app.core.audio.TtsManager
 import com.enziidict.app.core.database.DictionaryRepository
+import com.enziidict.app.core.database.LearningProgressRepository
 import com.enziidict.app.core.model.AiVoice
 import com.enziidict.app.core.model.SpeakingAnalysis
 import com.enziidict.app.core.model.SpeakingLevel
@@ -45,6 +46,18 @@ data class HistoryDetailUiState(
     val actionMessage: String? = null
 )
 
+data class SpeakingSessionRecapUi(
+    val sessionId: Long,
+    val durationSec: Int,
+    val speakingMinutes: Int,
+    val userTurns: Int,
+    val xpEarned: Int,
+    val streakAfter: Int,
+    val streakIncreased: Boolean,
+    val freezeUsedCount: Int,
+    val goalJustCompleted: Boolean
+)
+
 data class SpeakingUiState(
     val selectedTopic: SpeakingTopic = SpeakingTopic.DAILY,
     val customTopicText: String = "",
@@ -66,13 +79,15 @@ data class SpeakingUiState(
     val subtitleTranslations: Map<Long, String> = emptyMap(),
     val pastSessions: List<SpeakingSession> = emptyList(),
     val showHistoryScreen: Boolean = false,
-    val historyDetail: HistoryDetailUiState? = null
+    val historyDetail: HistoryDetailUiState? = null,
+    val sessionRecap: SpeakingSessionRecapUi? = null
 )
 
 @HiltViewModel
 class SpeakingViewModel @Inject constructor(
     private val speakingDao: SpeakingDao,
     private val dictionaryRepository: DictionaryRepository,
+    private val progressRepository: LearningProgressRepository,
     private val settingsDataStore: SettingsDataStore,
     private val secureApiKeyStore: SecureApiKeyStore,
     private val geminiLiveClient: GeminiLiveClient,
@@ -98,6 +113,7 @@ class SpeakingViewModel @Inject constructor(
     private val subtitleTranslationsFlow = MutableStateFlow<Map<Long, String>>(emptyMap())
     private val showHistoryFlow = MutableStateFlow(false)
     private val historyDetailFlow = MutableStateFlow<HistoryDetailUiState?>(null)
+    private val sessionRecapFlow = MutableStateFlow<SpeakingSessionRecapUi?>(null)
 
     private var sessionStartedAtMillis: Long = 0L
     private var timerJob: Job? = null
@@ -143,7 +159,8 @@ class SpeakingViewModel @Inject constructor(
         secureApiKeyStore.apiKeyFlow,
         speakingDao.observeSessions(),
         showHistoryFlow,
-        historyDetailFlow
+        historyDetailFlow,
+        sessionRecapFlow
     ) { values ->
         val setup = values[0] as SetupConfig
         val audio = values[1] as LiveAudioSnapshot
@@ -155,6 +172,7 @@ class SpeakingViewModel @Inject constructor(
         val sessions = values[6] as List<SpeakingSession>
         val showHistory = values[7] as Boolean
         val detail = values[8] as HistoryDetailUiState?
+        val recap = values[9] as SpeakingSessionRecapUi?
 
         latestGeminiModel = settings.geminiModel
         latestLiveModel = settings.geminiLiveModel
@@ -185,7 +203,8 @@ class SpeakingViewModel @Inject constructor(
             subtitleTranslations = transcript.translations,
             pastSessions = sessions,
             showHistoryScreen = showHistory,
-            historyDetail = detail
+            historyDetail = detail,
+            sessionRecap = recap
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SpeakingUiState())
 
@@ -352,14 +371,35 @@ class SpeakingViewModel @Inject constructor(
                 durationSec = durationSec,
                 suggestionsJson = null
             )
-            settingsDataStore.recordStudyActivity()
+            val award = progressRepository.recordSpeakingSession(durationSec)
 
             if (openReviewAfter) {
-                showHistoryFlow.value = true
-                openHistoryDetail(sessionId, triggerAutoEvaluation = true)
+                val userTurns = speakingDao.getMessagesForSession(sessionId)
+                    .count { it.speaker.equals("USER", ignoreCase = true) }
+                val minutes = ((durationSec + 30) / 60).coerceAtLeast(1)
+                sessionRecapFlow.value = SpeakingSessionRecapUi(
+                    sessionId = sessionId,
+                    durationSec = durationSec,
+                    speakingMinutes = minutes,
+                    userTurns = userTurns,
+                    xpEarned = award.xpAdded,
+                    streakAfter = award.streakAfter,
+                    streakIncreased = award.streakIncreased,
+                    freezeUsedCount = award.freezeUsedCount,
+                    goalJustCompleted = award.goalJustCompleted
+                )
             } else {
                 connectionNoteFlow.value = "Đã kết thúc và lưu phiên nói (${durationSec}s)."
             }
+        }
+    }
+
+    fun dismissRecap(openDetailAfter: Boolean) {
+        val sessionId = sessionRecapFlow.value?.sessionId
+        sessionRecapFlow.value = null
+        if (openDetailAfter && sessionId != null) {
+            showHistoryFlow.value = true
+            openHistoryDetail(sessionId, triggerAutoEvaluation = true)
         }
     }
 

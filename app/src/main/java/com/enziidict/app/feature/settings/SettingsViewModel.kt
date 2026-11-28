@@ -7,20 +7,26 @@ import com.enziidict.app.BuildConfig
 import com.enziidict.app.core.network.AppReleaseInfo
 import com.enziidict.app.core.network.AppThemeMode
 import com.enziidict.app.core.network.AppUpdateManager
+import com.enziidict.app.core.network.DailyWordSource
 import com.enziidict.app.core.network.GeminiModelPresets
 import com.enziidict.app.core.network.OfflineMlKitTranslator
 import com.enziidict.app.core.network.SecureApiKeyStore
 import com.enziidict.app.core.network.SettingsDataStore
 import com.enziidict.app.core.network.UpdateCheckOutcome
 import com.enziidict.app.core.network.UpdateDownloadState
+import com.enziidict.app.core.network.UserSettings
+import com.enziidict.app.core.notification.PreviewNotificationKind
+import com.enziidict.app.core.notification.StudyNotificationScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.Locale
 import javax.inject.Inject
 
 data class SettingsUiState(
@@ -37,7 +43,13 @@ data class SettingsUiState(
     val isCheckingUpdate: Boolean = false,
     val availableRelease: AppReleaseInfo? = null,
     val updateStatusText: String? = null,
-    val downloadState: UpdateDownloadState = UpdateDownloadState.Idle
+    val downloadState: UpdateDownloadState = UpdateDownloadState.Idle,
+    val dailyReminderEnabled: Boolean = false,
+    val dailyReminderHour: Int = 20,
+    val dailyReminderMinute: Int = 0,
+    val dailyWordEnabled: Boolean = false,
+    val dailyWordFrequency: Int = 1,
+    val dailyWordSource: DailyWordSource = DailyWordSource.MIXED
 )
 
 @HiltViewModel
@@ -45,7 +57,8 @@ class SettingsViewModel @Inject constructor(
     private val secureApiKeyStore: SecureApiKeyStore,
     private val settingsDataStore: SettingsDataStore,
     private val mlKitTranslator: OfflineMlKitTranslator,
-    private val appUpdateManager: AppUpdateManager
+    private val appUpdateManager: AppUpdateManager,
+    private val notificationScheduler: StudyNotificationScheduler
 ) : ViewModel() {
 
     private val mlKitDownloadedFlow = MutableStateFlow(false)
@@ -71,7 +84,7 @@ class SettingsViewModel @Inject constructor(
         downloadStateFlow
     ) { values ->
         val apiKey = values[0] as String
-        val settings = values[1] as com.enziidict.app.core.network.UserSettings
+        val settings = values[1] as UserSettings
         val downloaded = values[2] as Boolean
         val busy = values[3] as Boolean
         val status = values[4] as String?
@@ -95,7 +108,13 @@ class SettingsViewModel @Inject constructor(
             isCheckingUpdate = checkingUpdate,
             availableRelease = release,
             updateStatusText = updateText,
-            downloadState = downloadState
+            downloadState = downloadState,
+            dailyReminderEnabled = settings.dailyReminderEnabled,
+            dailyReminderHour = settings.dailyReminderHour,
+            dailyReminderMinute = settings.dailyReminderMinute,
+            dailyWordEnabled = settings.dailyWordEnabled,
+            dailyWordFrequency = settings.dailyWordFrequency,
+            dailyWordSource = settings.dailyWordSource
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
@@ -107,6 +126,70 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             mlKitDownloadedFlow.value = mlKitTranslator.isEnViPackDownloaded()
         }
+    }
+
+    fun updateDailyReminder(
+        enabled: Boolean,
+        hour: Int = uiState.value.dailyReminderHour,
+        minute: Int = uiState.value.dailyReminderMinute
+    ) {
+        viewModelScope.launch {
+            settingsDataStore.saveDailyReminderConfig(enabled, hour, minute)
+            val updated = settingsDataStore.settingsFlow.first()
+            notificationScheduler.syncSchedules(updated)
+            errorMessageFlow.value = null
+            statusMessageFlow.value = if (enabled) {
+                String.format(
+                    Locale.US,
+                    "Đã bật nhắc học hằng ngày lúc %02d:%02d.",
+                    updated.dailyReminderHour,
+                    updated.dailyReminderMinute
+                )
+            } else {
+                "Đã tắt thông báo nhắc học hằng ngày."
+            }
+        }
+    }
+
+    fun updateDailyWord(
+        enabled: Boolean,
+        frequency: Int = uiState.value.dailyWordFrequency,
+        source: DailyWordSource = uiState.value.dailyWordSource
+    ) {
+        viewModelScope.launch {
+            settingsDataStore.saveDailyWordConfig(enabled, frequency, source)
+            val updated = settingsDataStore.settingsFlow.first()
+            notificationScheduler.syncSchedules(updated)
+            errorMessageFlow.value = null
+            statusMessageFlow.value = if (enabled) {
+                val freqLabel = if (updated.dailyWordFrequency >= 2) {
+                    "2 lần/ngày (08:30 & 13:00)"
+                } else {
+                    "1 lần/ngày (08:30)"
+                }
+                "Đã bật Từ vựng/Mẫu câu mỗi ngày: $freqLabel • ${updated.dailyWordSource.labelVi}."
+            } else {
+                "Đã tắt thông báo Từ vựng / Mẫu câu trong ngày."
+            }
+        }
+    }
+
+    fun sendTestReminderNow() {
+        notificationScheduler.triggerPreviewNow(PreviewNotificationKind.REMINDER)
+        errorMessageFlow.value = null
+        statusMessageFlow.value = "Đã gửi yêu cầu thông báo nhắc học thử — hãy kéo thanh trạng thái để xem."
+    }
+
+    fun sendTestWordNotificationNow() {
+        notificationScheduler.triggerPreviewNow(PreviewNotificationKind.WORD_OR_SENTENCE)
+        errorMessageFlow.value = null
+        statusMessageFlow.value = "Đã gửi thông báo Từ vựng / Mẫu câu hôm nay — chạm vào để mở thẳng chi tiết."
+    }
+
+    fun notifyNotificationPermissionDenied() {
+        statusMessageFlow.value = null
+        errorMessageFlow.value =
+            "Bạn chưa cấp quyền Thông báo (POST_NOTIFICATIONS). Hãy bật quyền trong Cài đặt ứng dụng Android để nhận nhắc học."
     }
 
     fun checkForUpdates() {

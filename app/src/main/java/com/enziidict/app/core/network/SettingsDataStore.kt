@@ -26,6 +26,12 @@ enum class AppThemeMode(val labelVi: String) {
     DARK("Tối")
 }
 
+enum class DailyWordSource(val labelVi: String) {
+    SRS_DUE("Sổ tay SRS đến hạn"),
+    COMMON_VOCAB("Từ vựng thông dụng"),
+    MIXED("Kết hợp (SRS + Mẫu câu)")
+}
+
 object GeminiModelPresets {
     const val FLASH_25 = "gemini-2.5-flash"
     const val FLASH_20 = "gemini-2.0-flash"
@@ -46,7 +52,15 @@ data class UserSettings(
     val customFolders: Set<String> = emptySet(),
     val themeMode: AppThemeMode = AppThemeMode.SYSTEM,
     val streakDays: Int = 0,
-    val lastStudyEpochDay: Long = 0L
+    val lastStudyEpochDay: Long = 0L,
+    val studiedToday: Boolean = false,
+    val dailyReminderEnabled: Boolean = false,
+    val dailyReminderHour: Int = 20,
+    val dailyReminderMinute: Int = 0,
+    val dailyWordEnabled: Boolean = false,
+    val dailyWordFrequency: Int = 1,
+    val dailyWordSource: DailyWordSource = DailyWordSource.MIXED,
+    val dismissedMascotTip: Boolean = false
 )
 
 @Singleton
@@ -62,6 +76,13 @@ class SettingsDataStore @Inject constructor(
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val STREAK_DAYS = intPreferencesKey("streak_days")
         val LAST_STUDY_EPOCH_DAY = longPreferencesKey("last_study_epoch_day")
+        val DAILY_REMINDER_ENABLED = booleanPreferencesKey("daily_reminder_enabled")
+        val DAILY_REMINDER_HOUR = intPreferencesKey("daily_reminder_hour")
+        val DAILY_REMINDER_MINUTE = intPreferencesKey("daily_reminder_minute")
+        val DAILY_WORD_ENABLED = booleanPreferencesKey("daily_word_enabled")
+        val DAILY_WORD_FREQUENCY = intPreferencesKey("daily_word_frequency")
+        val DAILY_WORD_SOURCE = stringPreferencesKey("daily_word_source")
+        val DISMISSED_MASCOT_TIP = booleanPreferencesKey("dismissed_mascot_tip")
     }
 
     val settingsFlow: Flow<UserSettings> = context.settingsDataStore.data.map { prefs ->
@@ -72,7 +93,10 @@ class SettingsDataStore @Inject constructor(
         val rawStreak = prefs[Keys.STREAK_DAYS] ?: 0
         val lastDay = prefs[Keys.LAST_STUDY_EPOCH_DAY] ?: 0L
         val today = LocalDate.now().toEpochDay()
-        val effectiveStreak = if (lastDay == today || lastDay == today - 1L) rawStreak else 0
+        val studiedToday = lastDay == today
+        val effectiveStreak = if (studiedToday || lastDay == today - 1L) rawStreak else 0
+        val wordSourceName = prefs[Keys.DAILY_WORD_SOURCE] ?: DailyWordSource.MIXED.name
+        val wordSource = DailyWordSource.entries.firstOrNull { it.name == wordSourceName } ?: DailyWordSource.MIXED
 
         UserSettings(
             geminiModel = prefs[Keys.GEMINI_MODEL] ?: GeminiModelPresets.FLASH_25,
@@ -83,8 +107,22 @@ class SettingsDataStore @Inject constructor(
             customFolders = prefs[Keys.CUSTOM_FOLDERS] ?: emptySet(),
             themeMode = theme,
             streakDays = effectiveStreak,
-            lastStudyEpochDay = lastDay
+            lastStudyEpochDay = lastDay,
+            studiedToday = studiedToday,
+            dailyReminderEnabled = prefs[Keys.DAILY_REMINDER_ENABLED] ?: false,
+            dailyReminderHour = (prefs[Keys.DAILY_REMINDER_HOUR] ?: 20).coerceIn(0, 23),
+            dailyReminderMinute = (prefs[Keys.DAILY_REMINDER_MINUTE] ?: 0).coerceIn(0, 59),
+            dailyWordEnabled = prefs[Keys.DAILY_WORD_ENABLED] ?: false,
+            dailyWordFrequency = (prefs[Keys.DAILY_WORD_FREQUENCY] ?: 1).coerceIn(1, 2),
+            dailyWordSource = wordSource,
+            dismissedMascotTip = prefs[Keys.DISMISSED_MASCOT_TIP] ?: false
         )
+    }
+
+    suspend fun dismissMascotTip() {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.DISMISSED_MASCOT_TIP] = true
+        }
     }
 
     suspend fun saveGeminiModel(model: String) {
@@ -98,6 +136,22 @@ class SettingsDataStore @Inject constructor(
     suspend fun saveThemeMode(mode: AppThemeMode) {
         context.settingsDataStore.edit { prefs ->
             prefs[Keys.THEME_MODE] = mode.name
+        }
+    }
+
+    suspend fun saveDailyReminderConfig(enabled: Boolean, hour: Int, minute: Int) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.DAILY_REMINDER_ENABLED] = enabled
+            prefs[Keys.DAILY_REMINDER_HOUR] = hour.coerceIn(0, 23)
+            prefs[Keys.DAILY_REMINDER_MINUTE] = minute.coerceIn(0, 59)
+        }
+    }
+
+    suspend fun saveDailyWordConfig(enabled: Boolean, frequency: Int, source: DailyWordSource) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.DAILY_WORD_ENABLED] = enabled
+            prefs[Keys.DAILY_WORD_FREQUENCY] = frequency.coerceIn(1, 2)
+            prefs[Keys.DAILY_WORD_SOURCE] = source.name
         }
     }
 

@@ -121,7 +121,7 @@ class DictionaryRepository @Inject constructor(
         }
 
         // Tier 2: Full-text search (supports Vietnamese -> English & collocations)
-        if (results.size < limit) {
+        if (results.size < limit && cleaned.length >= 2) {
             val ftsToken = cleaned
                 .replace(Regex("[^\\p{L}\\p{N}\\s]"), " ")
                 .trim()
@@ -137,8 +137,9 @@ class DictionaryRepository @Inject constructor(
             }
         }
 
-        // Tier 3: Direct Vietnamese substring lookup (handles all Vietnamese tone marks reliably)
-        if (results.size < limit) {
+        // Tier 3: Substring fallback on meaning_vi (guarded at 100K+ scale so English typing stays <15ms)
+        val hasNonAscii = cleaned.any { it.code > 127 }
+        if (cleaned.length >= 2 && results.size < 5 && (hasNonAscii || results.isEmpty())) {
             dictionaryDao.searchByMeaning(cleaned, limit - results.size).forEach { entry ->
                 results.putIfAbsent(entry.id, entry)
             }

@@ -6,6 +6,7 @@ import com.enziidict.app.data.local.dao.DictionaryDao
 import com.enziidict.app.data.local.dao.ReadingDao
 import com.enziidict.app.data.local.dao.SavedWordDao
 import com.enziidict.app.data.local.dao.SpeakingDao
+import com.enziidict.app.data.local.dao.StudyProgressDao
 import com.enziidict.app.data.local.dao.WordFolderDao
 import dagger.Module
 import dagger.Provides
@@ -35,7 +36,10 @@ object DatabaseModule {
             "dictionary.db"
         )
             .createFromAsset("dictionary.db")
-            .addMigrations(EnziiDatabaseMigrations.MIGRATION_1_2)
+            .addMigrations(
+                EnziiDatabaseMigrations.MIGRATION_1_2,
+                EnziiDatabaseMigrations.MIGRATION_2_3
+            )
             .build()
     }
 
@@ -53,4 +57,7 @@ object DatabaseModule {
 
     @Provides
     fun provideReadingDao(db: EnziiDatabase): ReadingDao = db.readingDao()
+
+    @Provides
+    fun provideStudyProgressDao(db: EnziiDatabase): StudyProgressDao = db.studyProgressDao()
 }

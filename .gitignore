@@ -9,6 +9,9 @@ build/
 *.ap_
 *.dex
 
+# Raw large dictionary source downloads (compiled output stays in assets/dictionary.db)
+tools/dict-builder/anhviet109K.*
+
 # Keystore & Local Secrets (KHÔNG commit lên Git)
 *.jks
 *.keystore

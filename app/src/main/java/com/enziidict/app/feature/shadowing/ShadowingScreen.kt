@@ -92,6 +92,9 @@ import com.enziidict.app.core.audio.TtsAccent
 import com.enziidict.app.core.audio.WordMatchStatus
 import com.enziidict.app.core.network.ShadowingAiFeedback
 import com.enziidict.app.ui.components.BentoCard
+import com.enziidict.app.ui.components.DuiMascotView
+import com.enziidict.app.ui.components.MascotMood
+import com.enziidict.app.ui.components.MascotState
 import com.enziidict.app.ui.components.rememberEnziiHaptics
 import java.util.Locale
 import kotlin.math.abs
@@ -258,6 +261,32 @@ fun ShadowingScreen(
                     }
                 )
             }
+
+            // Mascot Companion Strip reacting to listening / recording / scoring
+            val shadowingScore = state.wordDiffResult?.scorePercent ?: state.aiFeedback?.fluencyScore ?: 0
+            val shadowingFocused = state.isPlayingModel ||
+                state.isRecording ||
+                state.isSpeechListening ||
+                state.isEvaluatingAi ||
+                state.isComparingSequence
+            val shadowingMood = when {
+                shadowingFocused -> MascotMood.FOCUSED
+                shadowingScore >= 80 -> MascotMood.HAPPY
+                else -> MascotMood.INQUISITIVE
+            }
+            val shadowingBubble = when {
+                state.isRecording || state.isSpeechListening -> "Chú Dúi đang lắng nghe từng cụm từ của bạn..."
+                state.isPlayingModel -> "Lắng nghe ngữ điệu mẫu thật kỹ nhé!"
+                state.isEvaluatingAi -> "Chú Dúi đang nhờ AI chấm trọng âm & nối âm..."
+                shadowingScore >= 80 -> "Phát âm đạt $shadowingScore%! Tiếp tục giữ phong độ nhé!"
+                else -> "Nghe mẫu từng cụm rồi đọc nhại theo chú Dúi nào!"
+            }
+            DuiMascotView(
+                state = MascotState(mood = shadowingMood),
+                size = 64.dp,
+                messageBubble = shadowingBubble,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             // 2. Hero Sentence & Rhythm Chunks Card
             BentoCard(

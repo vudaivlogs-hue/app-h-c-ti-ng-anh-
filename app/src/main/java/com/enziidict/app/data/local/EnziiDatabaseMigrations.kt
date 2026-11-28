@@ -134,4 +134,48 @@ object EnziiDatabaseMigrations {
             )
         }
     }
+
+    /**
+     * Schema v2 -> v3:
+     * - Adds `daily_study_logs` and `user_streak_state` tables for Duolingo-style
+     *   XP, daily quests, Streak Freeze, and weekly/monthly learning summaries.
+     */
+    val MIGRATION_2_3: Migration = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `daily_study_logs` (
+                    `date_yyyy_mm_dd` TEXT NOT NULL,
+                    `words_reviewed` INTEGER NOT NULL,
+                    `words_learned` INTEGER NOT NULL,
+                    `speaking_minutes` INTEGER NOT NULL,
+                    `shadowing_count` INTEGER NOT NULL,
+                    `xp_earned` INTEGER NOT NULL,
+                    `goal_completed` INTEGER NOT NULL,
+                    PRIMARY KEY(`date_yyyy_mm_dd`)
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `user_streak_state` (
+                    `id` INTEGER NOT NULL,
+                    `current_streak` INTEGER NOT NULL,
+                    `longest_streak` INTEGER NOT NULL,
+                    `freeze_count` INTEGER NOT NULL,
+                    `last_active_date` TEXT,
+                    `daily_xp_goal` INTEGER NOT NULL,
+                    PRIMARY KEY(`id`)
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                INSERT OR IGNORE INTO `user_streak_state` (
+                    `id`, `current_streak`, `longest_streak`, `freeze_count`, `last_active_date`, `daily_xp_goal`
+                ) VALUES (1, 0, 0, 1, NULL, 50)
+                """.trimIndent()
+            )
+        }
+    }
 }

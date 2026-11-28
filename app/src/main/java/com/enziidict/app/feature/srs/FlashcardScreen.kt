@@ -76,6 +76,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.enziidict.app.core.audio.TtsAccent
 import com.enziidict.app.core.model.ReviewGrade
 import com.enziidict.app.data.local.dao.SavedWordWithEntry
+import com.enziidict.app.feature.progress.FlashcardRecapCard
 import com.enziidict.app.ui.components.CefrPill
 import com.enziidict.app.ui.components.FOLDER_COLOR_PALETTE
 import com.enziidict.app.ui.components.IpaAudioPill
@@ -86,6 +87,7 @@ import java.util.Locale
 
 @Composable
 fun FlashcardScreen(
+    onOpenLearningSummary: () -> Unit = {},
     viewModel: SrsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -101,6 +103,11 @@ fun FlashcardScreen(
             reviewedCount = state.reviewedCount,
             sessionTotal = state.sessionTotal,
             sessionCompleted = state.sessionCompleted,
+            sessionRecap = state.sessionRecap,
+            onOpenLearningSummary = {
+                viewModel.exitReviewSession()
+                onOpenLearningSummary()
+            },
             onBack = viewModel::exitReviewSession,
             onToggleFlip = {
                 haptics.lightTap()
@@ -560,6 +567,8 @@ private fun FlashcardReviewMode(
     reviewedCount: Int,
     sessionTotal: Int,
     sessionCompleted: Boolean,
+    sessionRecap: SrsSessionRecapUi?,
+    onOpenLearningSummary: () -> Unit,
     onBack: () -> Unit,
     onToggleFlip: () -> Unit,
     onSpeak: (String, TtsAccent) -> Unit,
@@ -613,37 +622,12 @@ private fun FlashcardReviewMode(
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = "Hoàn thành phiên ôn tập!",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Bạn đã ôn xong $reviewedCount thẻ. Lịch ôn tiếp theo (next_review_at) đã được cập nhật theo thuật toán SM-2.",
-                            textAlign = TextAlign.Center,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Button(onClick = onBack) {
-                            Text("Quay lại Sổ tay")
-                        }
-                    }
-                }
+                FlashcardRecapCard(
+                    recap = sessionRecap,
+                    reviewedCountFallback = reviewedCount,
+                    onOpenLearningSummary = onOpenLearningSummary,
+                    onBack = onBack
+                )
             }
             return
         }
