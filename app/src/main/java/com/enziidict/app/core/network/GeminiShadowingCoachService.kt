@@ -43,10 +43,21 @@ sealed interface ShadowingAiOutcome {
 @Singleton
 class GeminiShadowingCoachService(
     private val json: Json,
-    private val httpExecutor: GeminiHttpExecutor
+    private val httpExecutor: GeminiHttpExecutor,
+    private val modelCatalogService: GeminiModelCatalogService? = null,
+    private val settingsDataStore: SettingsDataStore? = null
 ) {
+    constructor(
+        json: Json,
+        httpExecutor: GeminiHttpExecutor
+    ) : this(json, httpExecutor, null, null)
+
     @Inject
-    constructor(json: Json) : this(json, defaultExecutor())
+    constructor(
+        json: Json,
+        modelCatalogService: GeminiModelCatalogService,
+        settingsDataStore: SettingsDataStore
+    ) : this(json, defaultExecutor(), modelCatalogService, settingsDataStore)
 
     suspend fun evaluateShadowing(
         targetSentence: String,
@@ -68,8 +79,8 @@ class GeminiShadowingCoachService(
             return ShadowingAiOutcome.ApiError(400, "Chưa có bản ghi âm hoặc lời nhận diện để phân tích.")
         }
 
-        val selectedModel = model.trim().ifEmpty { GeminiModelPresets.FLASH_25 }
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/$selectedModel:generateContent?key=$cleanedKey"
+        val initialModel = GeminiModelCatalogService.normalizeModelId(model)
+            .ifEmpty { GeminiModelPresets.FLASH_25 }
 
         return withContext(Dispatchers.IO) {
             try {
@@ -83,19 +94,47 @@ class GeminiShadowingCoachService(
                     spokenTranscript = cleanedTranscript,
                     audioBase64 = base64Audio
                 )
-                val response = httpExecutor.postJson(url, requestBody)
+                var attemptedModel = initialModel
+                var response = postGenerateContent(attemptedModel, cleanedKey, requestBody)
+
+                if (response.statusCode == 404 && modelCatalogService != null) {
+                    val discovered = modelCatalogService.discoverModels(cleanedKey, forceRefresh = true)
+                    val fallbackModel = (discovered as? ModelDiscoveryOutcome.Success)
+                        ?.catalog
+                        ?.recommendedTextModel
+                        ?.let { GeminiModelCatalogService.normalizeModelId(it) }
+                        ?.takeIf { it.isNotEmpty() && it != attemptedModel }
+
+                    if (fallbackModel != null) {
+                        val retryResponse = postGenerateContent(fallbackModel, cleanedKey, requestBody)
+                        if (retryResponse.statusCode in 200..299) {
+                            settingsDataStore?.saveGeminiModel(fallbackModel)
+                        }
+                        attemptedModel = fallbackModel
+                        response = retryResponse
+                    }
+                }
+
+                val googleDetail = GeminiModelCatalogService.extractApiErrorMessage(json, response.body)
+                    ?.let { " Chi tiết: ${GeminiModelCatalogService.truncateDetail(it)}" }
+                    .orEmpty()
+
                 when {
                     response.statusCode in listOf(400, 401, 403) -> ShadowingAiOutcome.ApiError(
                         response.statusCode,
-                        "API Key không hợp lệ hoặc không dùng được model \"$selectedModel\" (HTTP ${response.statusCode})."
+                        "API Key không hợp lệ hoặc không dùng được model \"$attemptedModel\" (HTTP ${response.statusCode}).$googleDetail"
+                    )
+                    response.statusCode == 404 -> ShadowingAiOutcome.ApiError(
+                        404,
+                        "Model \"$attemptedModel\" không còn khả dụng (HTTP 404). Hãy vào Cài đặt → Kiểm tra Key & Tải model.$googleDetail"
                     )
                     response.statusCode == 429 -> ShadowingAiOutcome.ApiError(
                         429,
-                        "API Key tạm hết hạn mức (HTTP 429). Bạn vẫn có thể tiếp tục luyện offline."
+                        "API Key tạm hết hạn mức (HTTP 429). Bạn vẫn có thể tiếp tục luyện offline.$googleDetail"
                     )
                     response.statusCode !in 200..299 -> ShadowingAiOutcome.ApiError(
                         response.statusCode,
-                        "Lỗi máy chủ Gemini (HTTP ${response.statusCode})."
+                        "Lỗi máy chủ Gemini (HTTP ${response.statusCode}).$googleDetail"
                     )
                     else -> parseEnvelope(response.body, fallbackTranscript = cleanedTranscript)
                 }
@@ -113,6 +152,11 @@ class GeminiShadowingCoachService(
                 )
             }
         }
+    }
+
+    private fun postGenerateContent(modelId: String, apiKey: String, requestBody: String): HttpPostResponse {
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/$modelId:generateContent?key=$apiKey"
+        return httpExecutor.postJson(url, requestBody)
     }
 
     internal fun parseEnvelope(rawEnvelope: String, fallbackTranscript: String): ShadowingAiOutcome {

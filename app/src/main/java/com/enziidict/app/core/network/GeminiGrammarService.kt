@@ -71,10 +71,21 @@ fun interface GeminiHttpExecutor {
 @Singleton
 class GeminiGrammarService(
     private val json: Json,
-    private val httpExecutor: GeminiHttpExecutor
+    private val httpExecutor: GeminiHttpExecutor,
+    private val modelCatalogService: GeminiModelCatalogService? = null,
+    private val settingsDataStore: SettingsDataStore? = null
 ) {
+    constructor(
+        json: Json,
+        httpExecutor: GeminiHttpExecutor
+    ) : this(json, httpExecutor, null, null)
+
     @Inject
-    constructor(json: Json) : this(json, defaultHttpExecutor())
+    constructor(
+        json: Json,
+        modelCatalogService: GeminiModelCatalogService,
+        settingsDataStore: SettingsDataStore
+    ) : this(json, defaultHttpExecutor(), modelCatalogService, settingsDataStore)
 
     suspend fun analyze(
         text: String,
@@ -92,30 +103,60 @@ class GeminiGrammarService(
             return GrammarAnalysisOutcome.ApiError(400, "Vui lòng nhập nội dung cần phân tích.")
         }
 
-        val selectedModel = model.trim().ifEmpty { GeminiModelPresets.FLASH_25 }
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/$selectedModel:generateContent?key=$cleanedKey"
+        val initialModel = GeminiModelCatalogService.normalizeModelId(model)
+            .ifEmpty { GeminiModelPresets.FLASH_25 }
         val requestBody = buildRequestJson(cleanedText, enToVi)
 
         return withContext(Dispatchers.IO) {
             try {
-                val response = httpExecutor.postJson(url, requestBody)
+                var attemptedModel = initialModel
+                var response = postGenerateContent(attemptedModel, cleanedKey, requestBody)
+
+                if (response.statusCode == 404 && modelCatalogService != null) {
+                    val discovered = modelCatalogService.discoverModels(cleanedKey, forceRefresh = true)
+                    val fallbackModel = (discovered as? ModelDiscoveryOutcome.Success)
+                        ?.catalog
+                        ?.recommendedTextModel
+                        ?.let { GeminiModelCatalogService.normalizeModelId(it) }
+                        ?.takeIf { it.isNotEmpty() && it != attemptedModel }
+
+                    if (fallbackModel != null) {
+                        val retryResponse = postGenerateContent(fallbackModel, cleanedKey, requestBody)
+                        if (retryResponse.statusCode in 200..299) {
+                            settingsDataStore?.saveGeminiModel(fallbackModel)
+                        }
+                        attemptedModel = fallbackModel
+                        response = retryResponse
+                    }
+                }
+
+                val googleDetail = GeminiModelCatalogService.extractApiErrorMessage(json, response.body)
+                    ?.let { " Chi tiết: ${GeminiModelCatalogService.truncateDetail(it)}" }
+                    .orEmpty()
+
                 when {
                     response.statusCode == 400 || response.statusCode == 401 || response.statusCode == 403 -> {
                         GrammarAnalysisOutcome.ApiError(
                             response.statusCode,
-                            "API Key không hợp lệ hoặc không có quyền truy cập model \"$selectedModel\" (HTTP ${response.statusCode}). Vui lòng kiểm tra lại trong Cài đặt."
+                            "API Key không hợp lệ hoặc không có quyền truy cập model \"$attemptedModel\" (HTTP ${response.statusCode}).$googleDetail"
+                        )
+                    }
+                    response.statusCode == 404 -> {
+                        GrammarAnalysisOutcome.ApiError(
+                            404,
+                            "Model \"$attemptedModel\" không còn khả dụng (HTTP 404). Hãy vào Cài đặt → bấm \"Kiểm tra Key & Tải model\" để chọn model mới.$googleDetail"
                         )
                     }
                     response.statusCode == 429 -> {
                         GrammarAnalysisOutcome.ApiError(
                             429,
-                            "API Key đã vượt hạn mức tạm thời (HTTP 429). Vui lòng thử lại sau ít phút hoặc đổi model."
+                            "API Key đã vượt hạn mức tạm thời (HTTP 429). Vui lòng thử lại sau ít phút hoặc đổi model.$googleDetail"
                         )
                     }
                     response.statusCode !in 200..299 -> {
                         GrammarAnalysisOutcome.ApiError(
                             response.statusCode,
-                            "Lỗi máy chủ Gemini (HTTP ${response.statusCode}). Vui lòng thử lại."
+                            "Lỗi máy chủ Gemini (HTTP ${response.statusCode}).$googleDetail"
                         )
                     }
                     else -> parseGeminiResponse(response.body)
@@ -134,6 +175,11 @@ class GeminiGrammarService(
                 )
             }
         }
+    }
+
+    private fun postGenerateContent(modelId: String, apiKey: String, requestBody: String): HttpPostResponse {
+        val url = "https://generativelanguage.googleapis.com/v1beta/models/$modelId:generateContent?key=$apiKey"
+        return httpExecutor.postJson(url, requestBody)
     }
 
     internal fun parseGeminiResponse(rawEnvelope: String): GrammarAnalysisOutcome {

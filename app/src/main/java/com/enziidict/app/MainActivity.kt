@@ -49,6 +49,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.enziidict.app.core.database.DictionaryPackUpgrader
+import com.enziidict.app.core.database.FocusLockRepository
+import com.enziidict.app.core.database.FocusLockStatus
 import com.enziidict.app.core.model.SpeakingTopic
 import com.enziidict.app.core.network.AppThemeMode
 import com.enziidict.app.core.network.AppUpdateManager
@@ -57,6 +59,8 @@ import com.enziidict.app.core.network.UpdateCheckOutcome
 import com.enziidict.app.core.network.UserSettings
 import com.enziidict.app.core.notification.EnziiNotificationHelper
 import com.enziidict.app.feature.dictionary.DictionaryScreen
+import com.enziidict.app.feature.focuslock.AppBlockerService
+import com.enziidict.app.feature.focuslock.FocusLockScreen
 import com.enziidict.app.feature.home.HomeScreen
 import com.enziidict.app.feature.progress.LearningSummaryScreen
 import com.enziidict.app.feature.reading.ReadingScreen
@@ -94,6 +98,9 @@ class MainActivity : ComponentActivity() {
     @Inject
     lateinit var dictionaryPackUpgrader: DictionaryPackUpgrader
 
+    @Inject
+    lateinit var focusLockRepository: FocusLockRepository
+
     private val pendingNotificationIntent = MutableStateFlow<Intent?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -117,6 +124,14 @@ class MainActivity : ComponentActivity() {
                 launch {
                     dictionaryPackUpgrader.upgradeIfNeeded()
                 }
+                launch {
+                    focusLockRepository.resetEmergencyIfNewDay()
+                    val eval = focusLockRepository.getCurrentEvaluation()
+                    AppBlockerService.syncServiceState(
+                        context = this@MainActivity,
+                        shouldRun = eval.status != FocusLockStatus.DISABLED && eval.lockedPackages.isNotEmpty()
+                    )
+                }
                 hasAppUpdate = runCatching {
                     appUpdateManager.checkLatestRelease() is UpdateCheckOutcome.UpdateAvailable
                 }.getOrDefault(false)
@@ -126,6 +141,7 @@ class MainActivity : ComponentActivity() {
                 var showSplash by remember { mutableStateOf(true) }
                 var currentTab by remember { mutableStateOf(MainTab.HOME) }
                 var showSettingsScreen by remember { mutableStateOf(false) }
+                var showFocusLockScreen by remember { mutableStateOf(false) }
                 var showReadingScreen by remember { mutableStateOf(false) }
                 var showShadowingScreen by remember { mutableStateOf(false) }
                 var showLearningSummaryScreen by remember { mutableStateOf(false) }
@@ -139,6 +155,7 @@ class MainActivity : ComponentActivity() {
                     if (!dest.isNullOrBlank()) {
                         showSplash = false
                         showSettingsScreen = false
+                        showFocusLockScreen = false
                         showReadingScreen = false
                         showLearningSummaryScreen = false
                         when (dest) {
@@ -167,8 +184,17 @@ class MainActivity : ComponentActivity() {
                     showSplash -> {
                         EnziiSplashOverlay(onFinished = { showSplash = false })
                     }
+                    showFocusLockScreen -> {
+                        FocusLockScreen(onBack = { showFocusLockScreen = false })
+                    }
                     showSettingsScreen -> {
-                        SettingsScreen(onBack = { showSettingsScreen = false })
+                        SettingsScreen(
+                            onBack = { showSettingsScreen = false },
+                            onOpenFocusLock = {
+                                showSettingsScreen = false
+                                showFocusLockScreen = true
+                            }
+                        )
                     }
                     showLearningSummaryScreen -> {
                         LearningSummaryScreen(onBack = { showLearningSummaryScreen = false })
@@ -236,7 +262,8 @@ class MainActivity : ComponentActivity() {
                                             pendingShadowingItem = null
                                             showShadowingScreen = true
                                         },
-                                        onOpenLearningSummary = { showLearningSummaryScreen = true }
+                                        onOpenLearningSummary = { showLearningSummaryScreen = true },
+                                        onOpenFocusLock = { showFocusLockScreen = true }
                                     )
                                     MainTab.DICTIONARY -> DictionaryScreen(
                                         initialQuery = pendingDictionaryQuery,

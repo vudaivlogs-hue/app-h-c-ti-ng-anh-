@@ -3,6 +3,7 @@ package com.enziidict.app.data.local
 import android.content.Context
 import androidx.room.Room
 import com.enziidict.app.data.local.dao.DictionaryDao
+import com.enziidict.app.data.local.dao.FocusLockDao
 import com.enziidict.app.data.local.dao.ReadingDao
 import com.enziidict.app.data.local.dao.SavedWordDao
 import com.enziidict.app.data.local.dao.SpeakingDao
@@ -38,7 +39,8 @@ object DatabaseModule {
             .createFromAsset("dictionary.db")
             .addMigrations(
                 EnziiDatabaseMigrations.MIGRATION_1_2,
-                EnziiDatabaseMigrations.MIGRATION_2_3
+                EnziiDatabaseMigrations.MIGRATION_2_3,
+                EnziiDatabaseMigrations.MIGRATION_3_4
             )
             .build()
     }
@@ -60,4 +62,7 @@ object DatabaseModule {
 
     @Provides
     fun provideStudyProgressDao(db: EnziiDatabase): StudyProgressDao = db.studyProgressDao()
+
+    @Provides
+    fun provideFocusLockDao(db: EnziiDatabase): FocusLockDao = db.focusLockDao()
 }

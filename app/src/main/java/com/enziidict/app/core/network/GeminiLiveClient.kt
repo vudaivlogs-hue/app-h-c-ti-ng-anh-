@@ -22,7 +22,10 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import okio.ByteString
+import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -51,6 +54,11 @@ class GeminiLiveClient @Inject constructor(
     @Volatile
     private var webSocket: WebSocket? = null
 
+    private val setupCompleted = AtomicBoolean(false)
+
+    val isReadyForAudio: Boolean
+        get() = webSocket != null && setupCompleted.get()
+
     private val _events = MutableSharedFlow<GeminiLiveEvent>(extraBufferCapacity = 128)
     val events: SharedFlow<GeminiLiveEvent> = _events.asSharedFlow()
 
@@ -69,14 +77,19 @@ class GeminiLiveClient @Inject constructor(
             return
         }
 
-        val url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=$cleanedKey"
+        val normalizedModel = GeminiModelCatalogService.normalizeFullModelName(model)
+            .ifEmpty { GeminiModelPresets.DEFAULT_LIVE_MODEL }
+        val encodedKey = URLEncoder.encode(cleanedKey, "UTF-8")
+        val url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=$encodedKey"
         val request = Request.Builder().url(url).build()
 
+        setupCompleted.set(false)
         webSocket = okHttpClient.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(ws: WebSocket, response: Response) {
+                if (ws !== webSocket) return
                 _events.tryEmit(GeminiLiveEvent.Connected)
                 val setupPayload = buildSetupPayload(
-                    model = model,
+                    model = normalizedModel,
                     topic = topic,
                     level = level,
                     voice = voice,
@@ -86,38 +99,56 @@ class GeminiLiveClient @Inject constructor(
             }
 
             override fun onMessage(ws: WebSocket, text: String) {
+                if (ws !== webSocket) return
                 parseServerMessage(text)
             }
 
+            override fun onMessage(ws: WebSocket, bytes: ByteString) {
+                // Gemini Live API sends BidiGenerateContentServerMessage envelopes as UTF-8 binary frames.
+                if (ws !== webSocket) return
+                parseServerMessage(bytes.utf8())
+            }
+
             override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
-                val detail = response?.message?.takeIf { it.isNotBlank() } ?: t.message ?: "Lỗi kết nối WebSocket"
+                if (ws !== webSocket) return
+                setupCompleted.set(false)
+                val detail = response?.message?.takeIf { it.isNotBlank() }
+                    ?: t.message
+                    ?: "Lỗi kết nối WebSocket"
                 _events.tryEmit(GeminiLiveEvent.Error(detail))
             }
 
+            override fun onClosing(ws: WebSocket, code: Int, reason: String) {
+                if (ws !== webSocket) return
+                setupCompleted.set(false)
+                if (code != 1000) {
+                    val detail = reason.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()
+                    _events.tryEmit(GeminiLiveEvent.Error("Gemini Live đóng kết nối (mã $code$detail)"))
+                }
+            }
+
             override fun onClosed(ws: WebSocket, code: Int, reason: String) {
-                _events.tryEmit(GeminiLiveEvent.Disconnected)
+                if (ws !== webSocket) return
+                setupCompleted.set(false)
+                if (code != 1000) {
+                    val detail = reason.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()
+                    _events.tryEmit(GeminiLiveEvent.Error("Gemini Live đã đóng (mã $code$detail)"))
+                } else {
+                    _events.tryEmit(GeminiLiveEvent.Disconnected)
+                }
             }
         })
     }
 
     fun sendPcm16kAudioChunk(pcmBytes: ByteArray) {
         val ws = webSocket ?: return
-        val base64Audio = Base64.encodeToString(pcmBytes, Base64.NO_WRAP)
-        val payload = buildJsonObject {
-            putJsonObject("realtimeInput") {
-                put("mediaChunks", buildJsonArray {
-                    add(buildJsonObject {
-                        put("mimeType", "audio/pcm;rate=16000")
-                        put("data", base64Audio)
-                    })
-                })
-            }
-        }.toString()
-        ws.send(payload)
+        if (!setupCompleted.get() || pcmBytes.isEmpty()) return
+        ws.send(buildAudioChunkPayload(pcmBytes))
     }
 
     fun sendTextTurn(text: String) {
         val ws = webSocket ?: return
+        if (!setupCompleted.get() || text.isBlank()) return
         val payload = buildJsonObject {
             putJsonObject("clientContent") {
                 put("turns", buildJsonArray {
@@ -135,18 +166,33 @@ class GeminiLiveClient @Inject constructor(
     }
 
     fun disconnect() {
+        setupCompleted.set(false)
         val ws = webSocket
         webSocket = null
         runCatching { ws?.close(1000, "Session ended") }
     }
 
-    private fun buildSetupPayload(
+    internal fun buildAudioChunkPayload(pcmBytes: ByteArray): String {
+        val base64Audio = Base64.encodeToString(pcmBytes, Base64.NO_WRAP)
+        return buildJsonObject {
+            putJsonObject("realtimeInput") {
+                putJsonObject("audio") {
+                    put("mimeType", "audio/pcm;rate=16000")
+                    put("data", base64Audio)
+                }
+            }
+        }.toString()
+    }
+
+    internal fun buildSetupPayload(
         model: String,
         topic: SpeakingTopic,
         level: SpeakingLevel,
         voice: AiVoice,
         customTopicPrompt: String
     ): String {
+        val normalizedModel = GeminiModelCatalogService.normalizeFullModelName(model)
+            .ifEmpty { GeminiModelPresets.DEFAULT_LIVE_MODEL }
         val extraTopic = if (topic == SpeakingTopic.FREE && customTopicPrompt.isNotBlank()) {
             " The learner wants to discuss: ${customTopicPrompt.trim()}."
         } else {
@@ -163,7 +209,7 @@ class GeminiLiveClient @Inject constructor(
 
         return buildJsonObject {
             putJsonObject("setup") {
-                put("model", model)
+                put("model", normalizedModel)
                 putJsonObject("generationConfig") {
                     put("responseModalities", buildJsonArray {
                         add(JsonPrimitive("AUDIO"))
@@ -187,10 +233,19 @@ class GeminiLiveClient @Inject constructor(
         }.toString()
     }
 
-    private fun parseServerMessage(rawJson: String) {
+    internal fun parseServerMessage(rawJson: String) {
         runCatching {
             val root: JsonObject = json.parseToJsonElement(rawJson).jsonObject
+            root["error"]?.let { errorEl ->
+                val errMsg = runCatching {
+                    errorEl.jsonObject["message"]?.jsonPrimitive?.content
+                }.getOrNull()?.takeIf { it.isNotBlank() } ?: errorEl.toString()
+                setupCompleted.set(false)
+                _events.tryEmit(GeminiLiveEvent.Error(errMsg))
+                return
+            }
             if (root.containsKey("setupComplete")) {
+                setupCompleted.set(true)
                 _events.tryEmit(GeminiLiveEvent.SetupComplete)
             }
             val serverContent = root["serverContent"]?.jsonObject ?: return

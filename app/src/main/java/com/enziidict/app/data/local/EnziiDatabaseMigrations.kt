@@ -178,4 +178,50 @@ object EnziiDatabaseMigrations {
             )
         }
     }
+
+    /**
+     * Schema v3 -> v4:
+     * - Adds `focus_lock_config` and `locked_apps` tables for Focus App Lock
+     *   (daily learning goals & limited daily emergency unlocks).
+     */
+    val MIGRATION_3_4: Migration = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `focus_lock_config` (
+                    `id` INTEGER NOT NULL,
+                    `is_enabled` INTEGER NOT NULL,
+                    `required_study_minutes` INTEGER NOT NULL,
+                    `required_knowledge_count` INTEGER NOT NULL,
+                    `require_both` INTEGER NOT NULL,
+                    `emergency_unlock_duration_minutes` INTEGER NOT NULL,
+                    `max_emergency_unlocks_per_day` INTEGER NOT NULL,
+                    `emergency_unlocked_until_millis` INTEGER NOT NULL,
+                    `emergency_used_count_today` INTEGER NOT NULL,
+                    `emergency_usage_date` TEXT NOT NULL,
+                    PRIMARY KEY(`id`)
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `locked_apps` (
+                    `package_name` TEXT NOT NULL,
+                    `app_label` TEXT NOT NULL,
+                    `added_at` INTEGER NOT NULL,
+                    PRIMARY KEY(`package_name`)
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                INSERT OR IGNORE INTO `focus_lock_config` (
+                    `id`, `is_enabled`, `required_study_minutes`, `required_knowledge_count`,
+                    `require_both`, `emergency_unlock_duration_minutes`, `max_emergency_unlocks_per_day`,
+                    `emergency_unlocked_until_millis`, `emergency_used_count_today`, `emergency_usage_date`
+                ) VALUES (1, 0, 20, 10, 0, 5, 2, 0, 0, '')
+                """.trimIndent()
+            )
+        }
+    }
 }

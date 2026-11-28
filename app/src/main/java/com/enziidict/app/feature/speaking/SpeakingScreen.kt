@@ -160,6 +160,7 @@ fun SpeakingScreen(
         LiveCallView(
             state = state,
             onToggleMute = viewModel::toggleMute,
+            onToggleFallbackVoiceInput = viewModel::toggleFallbackVoiceInput,
             onToggleSubtitles = viewModel::toggleSubtitles,
             onSendFallbackMessage = viewModel::sendFallbackUserMessage,
             onEndCall = {
@@ -355,6 +356,7 @@ fun SpeakingScreen(
 private fun LiveCallView(
     state: SpeakingUiState,
     onToggleMute: () -> Unit,
+    onToggleFallbackVoiceInput: () -> Unit,
     onToggleSubtitles: () -> Unit,
     onSendFallbackMessage: (String) -> Unit,
     onEndCall: () -> Unit
@@ -388,7 +390,12 @@ private fun LiveCallView(
                         onClick = {},
                         label = {
                             Text(
-                                if (state.aecEnabled) "16kHz PCM • AEC ON" else "Audio Live"
+                                when {
+                                    state.isLiveSocketActive && state.aecEnabled -> "Live PCM • AEC ON"
+                                    state.isLiveSocketActive -> "Live Audio 16k/24k"
+                                    state.hasApiKey -> "AI Giọng nói (STT + TTS)"
+                                    else -> "Dự phòng Offline"
+                                }
                             )
                         }
                     )
@@ -427,20 +434,48 @@ private fun LiveCallView(
                         .padding(vertical = 4.dp)
                 )
 
-                // Call Controls: Mute, Bilingual Subtitles Toggle, End Call
+                // Call Controls: Mute (Live) or Voice Mic (AI Voice Fallback), Bilingual Subtitles Toggle, End Call
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    FilledTonalIconButton(
-                        onClick = onToggleMute,
-                        modifier = Modifier.size(52.dp)
-                    ) {
-                        Icon(
-                            if (state.isMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                            contentDescription = if (state.isMuted) "Mở mic" else "Tắt mic",
-                            tint = if (state.isMuted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                        )
+                    if (state.isLiveSocketActive) {
+                        FilledTonalIconButton(
+                            onClick = onToggleMute,
+                            modifier = Modifier.size(52.dp)
+                        ) {
+                            Icon(
+                                if (state.isMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                                contentDescription = if (state.isMuted) "Mở mic" else "Tắt mic",
+                                tint = if (state.isMuted) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    } else {
+                        FilledTonalButton(
+                            onClick = onToggleFallbackVoiceInput,
+                            enabled = !state.isAiReplyingFallback,
+                            colors = if (state.isListeningSpeechFallback) {
+                                ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            } else {
+                                ButtonDefaults.filledTonalButtonColors()
+                            }
+                        ) {
+                            Icon(
+                                if (state.isListeningSpeechFallback) Icons.Default.MicOff else Icons.Default.Mic,
+                                contentDescription = null
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                when {
+                                    state.isAiReplyingFallback -> "AI đang đáp..."
+                                    state.isListeningSpeechFallback -> "Dừng nghe"
+                                    else -> "Nói với AI"
+                                }
+                            )
+                        }
                     }
 
                     FilledTonalButton(onClick = onToggleSubtitles) {

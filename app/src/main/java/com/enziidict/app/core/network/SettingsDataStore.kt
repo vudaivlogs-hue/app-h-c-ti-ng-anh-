@@ -33,20 +33,26 @@ enum class DailyWordSource(val labelVi: String) {
 }
 
 object GeminiModelPresets {
+    const val FLASH_LATEST = "gemini-flash-latest"
     const val FLASH_25 = "gemini-2.5-flash"
+    const val FLASH_25_LITE = "gemini-2.5-flash-lite"
     const val FLASH_20 = "gemini-2.0-flash"
     const val PRO_25 = "gemini-2.5-pro"
+    const val DEFAULT_LIVE_MODEL = "models/gemini-2.5-flash-native-audio-preview-12-2025"
 
     val ALL: List<Pair<String, String>> = listOf(
-        FLASH_25 to "Nhanh, cân bằng chi phí & chất lượng (Khuyên dùng)",
-        FLASH_20 to "Phản hồi siêu nhanh cho giải thích ngắn",
-        PRO_25 to "Phân tích ngữ pháp & sắc thái chuyên sâu nhất"
+        FLASH_LATEST to "Tự động trỏ tới bản Flash mới nhất của API Key (Khuyên dùng)",
+        FLASH_25 to "Gemini 2.5 Flash — cân bằng tốc độ & chất lượng",
+        FLASH_25_LITE to "Gemini 2.5 Flash Lite — phản hồi nhanh, tiết kiệm quota",
+        PRO_25 to "Gemini 2.5 Pro — phân tích ngữ pháp chuyên sâu nhất"
     )
 }
 
 data class UserSettings(
     val geminiModel: String = GeminiModelPresets.FLASH_25,
-    val geminiLiveModel: String = "models/gemini-2.5-flash-native-audio-preview-09-2025",
+    val geminiLiveModel: String = GeminiModelPresets.DEFAULT_LIVE_MODEL,
+    val discoveredTextModels: List<String> = emptyList(),
+    val discoveredLiveModels: List<String> = emptyList(),
     val defaultAiVoice: AiVoice = AiVoice.AOEDE,
     val preferOfflineFallback: Boolean = false,
     val customFolders: Set<String> = emptySet(),
@@ -70,6 +76,8 @@ class SettingsDataStore @Inject constructor(
     private object Keys {
         val GEMINI_MODEL = stringPreferencesKey("gemini_model")
         val GEMINI_LIVE_MODEL = stringPreferencesKey("gemini_live_model")
+        val DISCOVERED_TEXT_MODELS = stringPreferencesKey("discovered_text_models")
+        val DISCOVERED_LIVE_MODELS = stringPreferencesKey("discovered_live_models")
         val DEFAULT_AI_VOICE = stringPreferencesKey("default_ai_voice")
         val PREFER_OFFLINE_FALLBACK = booleanPreferencesKey("prefer_offline_fallback")
         val CUSTOM_FOLDERS = stringSetPreferencesKey("custom_folders")
@@ -98,10 +106,26 @@ class SettingsDataStore @Inject constructor(
         val wordSourceName = prefs[Keys.DAILY_WORD_SOURCE] ?: DailyWordSource.MIXED.name
         val wordSource = DailyWordSource.entries.firstOrNull { it.name == wordSourceName } ?: DailyWordSource.MIXED
 
+        val discoveredText = prefs[Keys.DISCOVERED_TEXT_MODELS]
+            ?.split("\n")
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?: emptyList()
+        val discoveredLive = prefs[Keys.DISCOVERED_LIVE_MODELS]
+            ?.split("\n")
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?: emptyList()
+
         UserSettings(
-            geminiModel = prefs[Keys.GEMINI_MODEL] ?: GeminiModelPresets.FLASH_25,
-            geminiLiveModel = prefs[Keys.GEMINI_LIVE_MODEL]
-                ?: "models/gemini-2.5-flash-native-audio-preview-09-2025",
+            geminiModel = GeminiModelCatalogService.normalizeModelId(
+                prefs[Keys.GEMINI_MODEL] ?: GeminiModelPresets.FLASH_25
+            ).ifEmpty { GeminiModelPresets.FLASH_25 },
+            geminiLiveModel = GeminiModelCatalogService.normalizeFullModelName(
+                prefs[Keys.GEMINI_LIVE_MODEL] ?: GeminiModelPresets.DEFAULT_LIVE_MODEL
+            ).ifEmpty { GeminiModelPresets.DEFAULT_LIVE_MODEL },
+            discoveredTextModels = discoveredText,
+            discoveredLiveModels = discoveredLive,
             defaultAiVoice = voice,
             preferOfflineFallback = prefs[Keys.PREFER_OFFLINE_FALLBACK] ?: false,
             customFolders = prefs[Keys.CUSTOM_FOLDERS] ?: emptySet(),
@@ -126,10 +150,33 @@ class SettingsDataStore @Inject constructor(
     }
 
     suspend fun saveGeminiModel(model: String) {
-        val cleaned = model.trim()
+        val cleaned = GeminiModelCatalogService.normalizeModelId(model)
         if (cleaned.isEmpty()) return
         context.settingsDataStore.edit { prefs ->
             prefs[Keys.GEMINI_MODEL] = cleaned
+        }
+    }
+
+    suspend fun saveGeminiLiveModel(model: String) {
+        val cleaned = GeminiModelCatalogService.normalizeFullModelName(model)
+        if (cleaned.isEmpty()) return
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.GEMINI_LIVE_MODEL] = cleaned
+        }
+    }
+
+    suspend fun saveDiscoveredModels(textModels: List<String>, liveModels: List<String>) {
+        context.settingsDataStore.edit { prefs ->
+            prefs[Keys.DISCOVERED_TEXT_MODELS] = textModels
+                .map { GeminiModelCatalogService.normalizeModelId(it) }
+                .filter { it.isNotEmpty() }
+                .distinct()
+                .joinToString("\n")
+            prefs[Keys.DISCOVERED_LIVE_MODELS] = liveModels
+                .map { GeminiModelCatalogService.normalizeFullModelName(it) }
+                .filter { it.isNotEmpty() }
+                .distinct()
+                .joinToString("\n")
         }
     }
 

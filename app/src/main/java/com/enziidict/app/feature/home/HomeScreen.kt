@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Hearing
 import androidx.compose.material.icons.filled.Insights
 import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -84,6 +85,7 @@ fun HomeScreen(
     onOpenReading: () -> Unit,
     onOpenShadowing: () -> Unit = {},
     onOpenLearningSummary: () -> Unit = {},
+    onOpenFocusLock: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -840,6 +842,43 @@ fun HomeScreen(
                     )
                     Text(
                         text = "Nghe mẫu 0.75x–1.15x • Thu âm đối chiếu Giọng mẫu ↔ Giọng của bạn",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        // BENTO FOCUS APP LOCK SHORTCUT CARD
+        BentoCard(
+            modifier = Modifier.fillMaxWidth(),
+            cornerRadius = 22.dp,
+            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f),
+            onClick = {
+                haptics.lightTap()
+                onOpenFocusLock()
+            }
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    Icons.Default.Lock,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Focus App Lock (Khóa ứng dụng)",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Khóa app giải trí tới khi đạt mục tiêu học • Có mở khẩn cấp",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

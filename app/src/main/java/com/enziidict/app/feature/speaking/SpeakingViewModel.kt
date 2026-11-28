@@ -3,6 +3,7 @@ package com.enziidict.app.feature.speaking
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.enziidict.app.core.audio.LiveAudioManager
+import com.enziidict.app.core.audio.ShadowingSpeechRecognizer
 import com.enziidict.app.core.audio.TtsAccent
 import com.enziidict.app.core.audio.TtsManager
 import com.enziidict.app.core.database.DictionaryRepository
@@ -15,15 +16,21 @@ import com.enziidict.app.core.model.SpeakingTopic
 import com.enziidict.app.core.model.SuggestedVocab
 import com.enziidict.app.core.network.GeminiLiveClient
 import com.enziidict.app.core.network.GeminiLiveEvent
+import com.enziidict.app.core.network.GeminiModelCatalogService
+import com.enziidict.app.core.network.GeminiModelPresets
+import com.enziidict.app.core.network.GeminiSpeakingTurnService
+import com.enziidict.app.core.network.ModelDiscoveryOutcome
 import com.enziidict.app.core.network.OfflineMlKitTranslator
 import com.enziidict.app.core.network.SecureApiKeyStore
 import com.enziidict.app.core.network.SettingsDataStore
 import com.enziidict.app.core.network.SpeakingEvaluationOutcome
 import com.enziidict.app.core.network.SpeakingEvaluationService
+import com.enziidict.app.core.network.SpeakingTurnOutcome
 import com.enziidict.app.data.local.dao.SpeakingDao
 import com.enziidict.app.data.local.entity.SpeakingMessage
 import com.enziidict.app.data.local.entity.SpeakingSession
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,6 +79,10 @@ data class SpeakingUiState(
     val aecEnabled: Boolean = false,
     val activeMode: SpeakingMode = SpeakingMode.FALLBACK_STT_TTS,
     val hasApiKey: Boolean = false,
+    val isLiveSocketActive: Boolean = false,
+    val isListeningSpeechFallback: Boolean = false,
+    val isAiReplyingFallback: Boolean = false,
+    val activeLiveModelLabel: String = "",
     val connectionNote: String = "",
     val liveUserDraft: String = "",
     val liveAiDraft: String = "",
@@ -90,8 +101,11 @@ class SpeakingViewModel @Inject constructor(
     private val progressRepository: LearningProgressRepository,
     private val settingsDataStore: SettingsDataStore,
     private val secureApiKeyStore: SecureApiKeyStore,
+    private val geminiModelCatalogService: GeminiModelCatalogService,
     private val geminiLiveClient: GeminiLiveClient,
     private val liveAudioManager: LiveAudioManager,
+    private val geminiSpeakingTurnService: GeminiSpeakingTurnService,
+    private val shadowingSpeechRecognizer: ShadowingSpeechRecognizer,
     private val evaluationService: SpeakingEvaluationService,
     private val mlKitTranslator: OfflineMlKitTranslator,
     private val ttsManager: TtsManager,
@@ -106,6 +120,9 @@ class SpeakingViewModel @Inject constructor(
     private val activeSessionIdFlow = MutableStateFlow<Long?>(null)
     private val isMutedFlow = MutableStateFlow(false)
     private val elapsedSecondsFlow = MutableStateFlow(0)
+    private val isLiveSocketActiveFlow = MutableStateFlow(false)
+    private val isAiReplyingFallbackFlow = MutableStateFlow(false)
+    private val activeLiveModelLabelFlow = MutableStateFlow("")
     private val connectionNoteFlow = MutableStateFlow("")
     private val liveUserDraftFlow = MutableStateFlow("")
     private val liveAiDraftFlow = MutableStateFlow("")
@@ -117,8 +134,9 @@ class SpeakingViewModel @Inject constructor(
 
     private var sessionStartedAtMillis: Long = 0L
     private var timerJob: Job? = null
-    private var latestGeminiModel: String = "gemini-2.5-flash"
-    private var latestLiveModel: String = "models/gemini-2.5-flash-native-audio-preview-09-2025"
+    private var liveSetupTimeoutJob: Job? = null
+    private var latestGeminiModel: String = GeminiModelPresets.FLASH_25
+    private var latestLiveModel: String = GeminiModelPresets.DEFAULT_LIVE_MODEL
 
     private val setupConfigFlow = combine(
         topicFlow,
@@ -138,6 +156,15 @@ class SpeakingViewModel @Inject constructor(
         elapsedSecondsFlow
     ) { mic, ai, aec, muted, elapsed ->
         LiveAudioSnapshot(mic, ai, aec, muted, elapsed)
+    }
+
+    private val fallbackModeFlow = combine(
+        isLiveSocketActiveFlow,
+        shadowingSpeechRecognizer.isListening,
+        isAiReplyingFallbackFlow,
+        activeLiveModelLabelFlow
+    ) { liveActive, listeningFallback, replyingFallback, modelLabel ->
+        FallbackModeSnapshot(liveActive, listeningFallback, replyingFallback, modelLabel)
     }
 
     private val transcriptFlow = combine(
@@ -160,7 +187,8 @@ class SpeakingViewModel @Inject constructor(
         speakingDao.observeSessions(),
         showHistoryFlow,
         historyDetailFlow,
-        sessionRecapFlow
+        sessionRecapFlow,
+        fallbackModeFlow
     ) { values ->
         val setup = values[0] as SetupConfig
         val audio = values[1] as LiveAudioSnapshot
@@ -173,6 +201,7 @@ class SpeakingViewModel @Inject constructor(
         val showHistory = values[7] as Boolean
         val detail = values[8] as HistoryDetailUiState?
         val recap = values[9] as SpeakingSessionRecapUi?
+        val fallback = values[10] as FallbackModeSnapshot
 
         latestGeminiModel = settings.geminiModel
         latestLiveModel = settings.geminiLiveModel
@@ -196,6 +225,12 @@ class SpeakingViewModel @Inject constructor(
                 SpeakingMode.FALLBACK_STT_TTS
             },
             hasApiKey = hasKey,
+            isLiveSocketActive = fallback.isLiveSocketActive,
+            isListeningSpeechFallback = fallback.isListeningSpeechFallback,
+            isAiReplyingFallback = fallback.isAiReplyingFallback,
+            activeLiveModelLabel = fallback.activeLiveModelLabel.ifEmpty {
+                GeminiModelCatalogService.normalizeModelId(settings.geminiLiveModel)
+            },
             connectionNote = transcript.connectionNote,
             liveUserDraft = transcript.liveUserDraft,
             liveAiDraft = transcript.liveAiDraft,
@@ -217,7 +252,20 @@ class SpeakingViewModel @Inject constructor(
                         connectionNoteFlow.value = "Đã mở WebSocket, đang thiết lập gia sư AI..."
                     }
                     GeminiLiveEvent.SetupComplete -> {
+                        liveSetupTimeoutJob?.cancel()
+                        liveSetupTimeoutJob = null
+                        isLiveSocketActiveFlow.value = true
                         connectionNoteFlow.value = "Đang trò chuyện trực tiếp (Gemini Live 16k/24k PCM)"
+                        val audioResult = liveAudioManager.start { pcmChunk ->
+                            geminiLiveClient.sendPcm16kAudioChunk(pcmChunk)
+                        }
+                        audioResult.onFailure { err ->
+                            connectionNoteFlow.value =
+                                "Không khởi tạo được micro (${err.localizedMessage ?: "Audio error"})."
+                        }
+                        geminiLiveClient.sendTextTurn(
+                            "Hello! Please greet me naturally in 1-2 short sentences and start our roleplay."
+                        )
                     }
                     is GeminiLiveEvent.AudioChunk -> {
                         liveAudioManager.enqueueAiAudioPcm24k(event.pcm24kBytes)
@@ -239,12 +287,17 @@ class SpeakingViewModel @Inject constructor(
                         commitAiDraftIfPresent(sessionId)
                     }
                     is GeminiLiveEvent.Error -> {
-                        liveAudioManager.stopAll()
-                        connectionNoteFlow.value = "Mất kết nối Live (${event.message}). Đang dùng chế độ dự phòng."
+                        switchToAiVoiceFallback(
+                            sessionId = sessionId,
+                            reason = "Live Audio chưa khả dụng (${event.message}) — đã chuyển sang Trò chuyện AI bằng giọng nói (STT + Gemini + TTS)."
+                        )
                     }
                     GeminiLiveEvent.Disconnected -> {
-                        if (activeSessionIdFlow.value != null) {
-                            connectionNoteFlow.value = "Kết nối WebSocket đã đóng."
+                        if (activeSessionIdFlow.value != null && isLiveSocketActiveFlow.value) {
+                            isLiveSocketActiveFlow.value = false
+                            liveAudioManager.stopAll()
+                            connectionNoteFlow.value =
+                                "Kết nối Live đã đóng — bạn có thể tiếp tục nói/nhắn ở chế độ AI Giọng nói."
                         }
                     }
                 }
@@ -311,28 +364,89 @@ class SpeakingViewModel @Inject constructor(
             startTimer()
 
             if (mode == SpeakingMode.GEMINI_LIVE) {
-                connectionNoteFlow.value = "Đang kết nối Gemini Live & khởi tạo micro..."
-                geminiLiveClient.connect(
-                    apiKey = apiKey,
-                    model = latestLiveModel,
-                    topic = topicFlow.value,
-                    level = levelFlow.value,
-                    voice = voiceFlow.value,
-                    customTopicPrompt = customTopicFlow.value
-                )
-                val audioResult = liveAudioManager.start { pcmChunk ->
-                    geminiLiveClient.sendPcm16kAudioChunk(pcmChunk)
+                isLiveSocketActiveFlow.value = false
+                connectionNoteFlow.value = "Đang kiểm tra model Live khả dụng cho API Key..."
+
+                val discovery = geminiModelCatalogService.discoverModels(apiKey)
+                val catalog = (discovery as? ModelDiscoveryOutcome.Success)?.catalog
+                val resolvedLiveModel = when {
+                    catalog != null && catalog.liveAudioModels.any {
+                        it.fullName.equals(latestLiveModel, ignoreCase = true)
+                    } -> latestLiveModel
+                    catalog?.recommendedLiveModel != null -> {
+                        val picked = catalog.recommendedLiveModel
+                        settingsDataStore.saveGeminiLiveModel(picked)
+                        latestLiveModel = picked
+                        picked
+                    }
+                    catalog != null && catalog.liveAudioModels.isEmpty() -> null
+                    else -> latestLiveModel
                 }
-                audioResult.onFailure { err ->
+
+                if (resolvedLiveModel == null) {
+                    switchToAiVoiceFallback(
+                        sessionId = sessionId,
+                        reason = "API Key hiện tại không hỗ trợ Gemini Live WebSocket — đang dùng Trò chuyện AI bằng giọng nói (STT + Gemini + TTS)."
+                    )
+                } else {
+                    activeLiveModelLabelFlow.value = GeminiModelCatalogService.normalizeModelId(resolvedLiveModel)
                     connectionNoteFlow.value =
-                        "Không khởi tạo được micro (${err.localizedMessage ?: "Audio error"})."
+                        "Đang kết nối ${GeminiModelCatalogService.normalizeModelId(resolvedLiveModel)}..."
+                    geminiLiveClient.connect(
+                        apiKey = apiKey,
+                        model = resolvedLiveModel,
+                        topic = topicFlow.value,
+                        level = levelFlow.value,
+                        voice = voiceFlow.value,
+                        customTopicPrompt = customTopicFlow.value
+                    )
+                    liveSetupTimeoutJob?.cancel()
+                    liveSetupTimeoutJob = viewModelScope.launch {
+                        delay(12_000L)
+                        if (activeSessionIdFlow.value == sessionId && !isLiveSocketActiveFlow.value) {
+                            switchToAiVoiceFallback(
+                                sessionId = sessionId,
+                                reason = "Kết nối Gemini Live quá thời gian chờ — đã chuyển sang Trò chuyện AI bằng giọng nói (STT + Gemini + TTS)."
+                            )
+                        }
+                    }
                 }
             } else {
+                isLiveSocketActiveFlow.value = false
                 connectionNoteFlow.value = "Chế độ dự phòng (chưa nhập Gemini API Key trong Cài đặt)"
                 val greeting = buildFallbackGreeting(topicFlow.value, levelFlow.value)
                 appendCommittedMessage(sessionId, "AI", greeting)
                 ttsManager.speak(greeting, TtsAccent.US, speechRate = 0.95f)
             }
+        }
+    }
+
+    fun toggleFallbackVoiceInput() {
+        val sessionId = activeSessionIdFlow.value ?: return
+        if (isLiveSocketActiveFlow.value || isAiReplyingFallbackFlow.value) return
+
+        viewModelScope.launch(Dispatchers.Main.immediate) {
+            if (shadowingSpeechRecognizer.isListening.value) {
+                shadowingSpeechRecognizer.stopAndDestroy()
+                return@launch
+            }
+            connectionNoteFlow.value = "Đang lắng nghe giọng nói của bạn..."
+            shadowingSpeechRecognizer.startListening(
+                accent = TtsAccent.US,
+                onPartialResult = { partial ->
+                    liveUserDraftFlow.value = partial
+                },
+                onFinalResult = { spokenText ->
+                    liveUserDraftFlow.value = ""
+                    if (activeSessionIdFlow.value == sessionId) {
+                        sendFallbackUserMessage(spokenText)
+                    }
+                },
+                onError = { errMsg ->
+                    liveUserDraftFlow.value = ""
+                    connectionNoteFlow.value = errMsg
+                }
+            )
         }
     }
 
@@ -343,12 +457,79 @@ class SpeakingViewModel @Inject constructor(
 
         viewModelScope.launch {
             appendCommittedMessage(sessionId, "USER", cleaned)
-            if (secureApiKeyStore.getApiKey().isNotBlank()) {
+            val apiKey = secureApiKeyStore.getApiKey()
+            if (isLiveSocketActiveFlow.value && geminiLiveClient.isReadyForAudio) {
                 geminiLiveClient.sendTextTurn(cleaned)
+            } else if (apiKey.isNotBlank()) {
+                isAiReplyingFallbackFlow.value = true
+                connectionNoteFlow.value = "Gia sư AI đang suy nghĩ..."
+                val history = speakingDao.getMessagesForSession(sessionId)
+                when (
+                    val outcome = geminiSpeakingTurnService.generateReply(
+                        topic = topicFlow.value,
+                        level = levelFlow.value,
+                        customTopicPrompt = customTopicFlow.value,
+                        history = history,
+                        apiKey = apiKey,
+                        model = latestGeminiModel
+                    )
+                ) {
+                    is SpeakingTurnOutcome.Success -> {
+                        appendCommittedMessage(sessionId, "AI", outcome.replyText)
+                        ttsManager.speak(outcome.replyText, TtsAccent.US, speechRate = 0.95f)
+                        connectionNoteFlow.value = "AI Giọng nói sẵn sàng — bấm Mic hoặc nhập câu tiếp theo."
+                    }
+                    SpeakingTurnOutcome.MissingApiKey -> {
+                        val reply = "That's a great point! Could you tell me a little more?"
+                        appendCommittedMessage(sessionId, "AI", reply)
+                        ttsManager.speak(reply, TtsAccent.US, speechRate = 0.95f)
+                    }
+                    is SpeakingTurnOutcome.NetworkError -> {
+                        connectionNoteFlow.value = outcome.messageVi
+                    }
+                    is SpeakingTurnOutcome.ApiError -> {
+                        connectionNoteFlow.value = outcome.messageVi
+                    }
+                }
+                isAiReplyingFallbackFlow.value = false
             } else {
                 val reply = "That's a great point! Could you tell me a little more about what you mean?"
                 appendCommittedMessage(sessionId, "AI", reply)
                 ttsManager.speak(reply, TtsAccent.US, speechRate = 0.95f)
+            }
+        }
+    }
+
+    private suspend fun switchToAiVoiceFallback(sessionId: Long, reason: String) {
+        liveSetupTimeoutJob?.cancel()
+        liveSetupTimeoutJob = null
+        isLiveSocketActiveFlow.value = false
+        liveAudioManager.stopAll()
+        geminiLiveClient.disconnect()
+        connectionNoteFlow.value = reason
+
+        val existing = speakingDao.getMessagesForSession(sessionId)
+        if (existing.isEmpty()) {
+            val apiKey = secureApiKeyStore.getApiKey()
+            if (apiKey.isNotBlank()) {
+                isAiReplyingFallbackFlow.value = true
+                val greetingOutcome = geminiSpeakingTurnService.generateReply(
+                    topic = topicFlow.value,
+                    level = levelFlow.value,
+                    customTopicPrompt = customTopicFlow.value,
+                    history = emptyList(),
+                    apiKey = apiKey,
+                    model = latestGeminiModel
+                )
+                isAiReplyingFallbackFlow.value = false
+                val greeting = (greetingOutcome as? SpeakingTurnOutcome.Success)?.replyText
+                    ?: buildFallbackGreeting(topicFlow.value, levelFlow.value)
+                appendCommittedMessage(sessionId, "AI", greeting)
+                ttsManager.speak(greeting, TtsAccent.US, speechRate = 0.95f)
+            } else {
+                val greeting = buildFallbackGreeting(topicFlow.value, levelFlow.value)
+                appendCommittedMessage(sessionId, "AI", greeting)
+                ttsManager.speak(greeting, TtsAccent.US, speechRate = 0.95f)
             }
         }
     }
@@ -547,10 +728,17 @@ class SpeakingViewModel @Inject constructor(
     private fun stopHardwareResources() {
         timerJob?.cancel()
         timerJob = null
+        liveSetupTimeoutJob?.cancel()
+        liveSetupTimeoutJob = null
+        isLiveSocketActiveFlow.value = false
+        isAiReplyingFallbackFlow.value = false
         liveAudioManager.stopAll()
         geminiLiveClient.disconnect()
         ttsManager.stop()
         isMutedFlow.value = false
+        viewModelScope.launch(Dispatchers.Main.immediate) {
+            shadowingSpeechRecognizer.stopAndDestroy()
+        }
     }
 
     private fun startTimer() {
@@ -656,5 +844,12 @@ class SpeakingViewModel @Inject constructor(
         val activeMessages: List<SpeakingMessage>,
         val translations: Map<Long, String>,
         val connectionNote: String
+    )
+
+    private data class FallbackModeSnapshot(
+        val isLiveSocketActive: Boolean,
+        val isListeningSpeechFallback: Boolean,
+        val isAiReplyingFallback: Boolean,
+        val activeLiveModelLabel: String
     )
 }

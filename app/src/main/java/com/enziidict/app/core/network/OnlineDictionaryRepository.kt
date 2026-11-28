@@ -117,7 +117,8 @@ class OnlineDictionaryRepository internal constructor(
     private val json: Json,
     private val getExecutor: OnlineHttpGetExecutor,
     private val geminiPostExecutor: GeminiHttpExecutor,
-    private val mlKitTranslate: suspend (String) -> Result<String>
+    private val mlKitTranslate: suspend (String) -> Result<String>,
+    private val modelCatalogService: GeminiModelCatalogService? = null
 ) {
 
     @Inject
@@ -126,6 +127,7 @@ class OnlineDictionaryRepository internal constructor(
         offlineMlKitTranslator: OfflineMlKitTranslator,
         secureApiKeyStore: SecureApiKeyStore,
         settingsDataStore: SettingsDataStore,
+        modelCatalogService: GeminiModelCatalogService,
         json: Json
     ) : this(
         dictionaryRepository = dictionaryRepository,
@@ -134,7 +136,8 @@ class OnlineDictionaryRepository internal constructor(
         json = json,
         getExecutor = defaultGetExecutor(),
         geminiPostExecutor = defaultGeminiPostExecutor(),
-        mlKitTranslate = { text -> offlineMlKitTranslator.translate(text, enToVi = true) }
+        mlKitTranslate = { text -> offlineMlKitTranslator.translate(text, enToVi = true) },
+        modelCatalogService = modelCatalogService
     )
 
     suspend fun lookupOnline(rawQuery: String): OnlineLookupOutcome {
@@ -520,6 +523,35 @@ class OnlineDictionaryRepository internal constructor(
         }.getOrNull()
     }
 
+    private suspend fun postGeminiWithAutoRecovery(
+        apiKey: String,
+        initialModel: String,
+        body: String
+    ): HttpPostResponse {
+        val normalizedInitial = GeminiModelCatalogService.normalizeModelId(initialModel)
+            .ifEmpty { GeminiModelPresets.FLASH_25 }
+        val firstUrl = "https://generativelanguage.googleapis.com/v1beta/models/$normalizedInitial:generateContent?key=$apiKey"
+        val firstResp = geminiPostExecutor.postJson(firstUrl, body)
+        if (firstResp.statusCode != 404 || modelCatalogService == null) {
+            return firstResp
+        }
+
+        val discovered = modelCatalogService.discoverModels(apiKey, forceRefresh = true)
+        val fallbackModel = (discovered as? ModelDiscoveryOutcome.Success)
+            ?.catalog
+            ?.recommendedTextModel
+            ?.let { GeminiModelCatalogService.normalizeModelId(it) }
+            ?.takeIf { it.isNotEmpty() && it != normalizedInitial }
+            ?: return firstResp
+
+        val retryUrl = "https://generativelanguage.googleapis.com/v1beta/models/$fallbackModel:generateContent?key=$apiKey"
+        val retryResp = geminiPostExecutor.postJson(retryUrl, body)
+        if (retryResp.statusCode in 200..299) {
+            settingsDataStore.saveGeminiModel(fallbackModel)
+        }
+        return retryResp
+    }
+
     private suspend fun enrichWithGemini(
         word: String,
         pos: String,
@@ -528,8 +560,6 @@ class OnlineDictionaryRepository internal constructor(
         apiKey: String,
         model: String
     ): GeminiEnrichPayload? {
-        val selectedModel = model.trim().ifEmpty { GeminiModelPresets.FLASH_25 }
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/$selectedModel:generateContent?key=$apiKey"
         val prompt = buildString {
             appendLine("You are an English-Vietnamese lexicographer for Enzii Dict.")
             appendLine("Word: \"$word\" (primary POS: $pos)")
@@ -558,7 +588,7 @@ class OnlineDictionaryRepository internal constructor(
         val body = buildGeminiRequest(prompt)
         return withContext(Dispatchers.IO) {
             runCatching {
-                val resp = geminiPostExecutor.postJson(url, body)
+                val resp = postGeminiWithAutoRecovery(apiKey = apiKey, initialModel = model, body = body)
                 if (resp.statusCode !in 200..299) return@runCatching null
                 val candidate = extractGeminiText(resp.body) ?: return@runCatching null
                 json.decodeFromString<GeminiEnrichPayload>(stripMarkdownFences(candidate))
@@ -577,8 +607,6 @@ class OnlineDictionaryRepository internal constructor(
         apiKey: String,
         model: String
     ): GeminiFallbackResult {
-        val selectedModel = model.trim().ifEmpty { GeminiModelPresets.FLASH_25 }
-        val url = "https://generativelanguage.googleapis.com/v1beta/models/$selectedModel:generateContent?key=$apiKey"
         val prompt = """
             You are an English-Vietnamese dictionary editor in Enzii Dict.
             Explain the English word, idiom, slang, or phrase: "$query"
@@ -609,10 +637,13 @@ class OnlineDictionaryRepository internal constructor(
         val body = buildGeminiRequest(prompt)
         return withContext(Dispatchers.IO) {
             try {
-                val resp = geminiPostExecutor.postJson(url, body)
+                val resp = postGeminiWithAutoRecovery(apiKey = apiKey, initialModel = model, body = body)
                 if (resp.statusCode !in 200..299) {
+                    val detail = GeminiModelCatalogService.extractApiErrorMessage(json, resp.body)
+                        ?.let { " (${GeminiModelCatalogService.truncateDetail(it)})" }
+                        .orEmpty()
                     return@withContext GeminiFallbackResult.Failure(
-                        "Không tìm thấy \"$query\" trên Free Dictionary API và Gemini phản hồi mã lỗi ${resp.statusCode}."
+                        "Không tìm thấy \"$query\" trên Free Dictionary API và Gemini phản hồi mã lỗi ${resp.statusCode}$detail."
                     )
                 }
                 val candidate = extractGeminiText(resp.body)

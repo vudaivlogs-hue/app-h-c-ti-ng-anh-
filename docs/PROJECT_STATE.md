@@ -1,8 +1,8 @@
 # Trạng thái Dự án — Enzii Dict (`com.enziidict.app`)
 
-> **Cập nhật lần cuối**: 2026-11-28 (09:27)  
-> **Phiên gần nhất**: [012_nap-tu-dien-fvdp-109k.md](./sessions/012_nap-tu-dien-fvdp-109k.md)  
-> **Trạng thái build**: `BUILD SUCCESSFUL` — **45/45** unit & Robolectric tests đạt (`testDebugUnitTest`, 15 suites), kho **113.933 mục từ** FVDP (`dictionary.db` = `32.05 MB`), `assembleDebug` (`98,801,029` bytes = `94.22 MB`) (chưa push lên Git theo quy tắc test trước).
+> **Cập nhật lần cuối**: 2026-11-28 (11:13)  
+> **Phiên gần nhất**: [014_fix-gemini-404-va-live-speaking.md](./sessions/014_fix-gemini-404-va-live-speaking.md)  
+> **Trạng thái build**: `BUILD SUCCESSFUL` — **52/52** unit & Robolectric tests đạt (`testDebugUnitTest`, 17 suites), Room **v4** (`dictionary.db` = `32.06 MB`), `assembleDebug` (`99,361,251` bytes = `94.76 MB`), phát hành tag **`v0.4.0`** lên GitHub.
 
 ---
 
@@ -45,7 +45,9 @@ c:\O_D\app học tiếng anh\
 │       ├── 009_theo-doi-tien-do-duolingo-va-tong-ket.md # Nhật ký Room v3, Streak Freeze, Daily Quests & Tổng kết học tập
 │       ├── 010_tich-hop-logo-va-linh-vat-chu-dui.md     # Nhật ký WebP chú Dúi (85.6 KB), Adaptive Icon & DuiMascotView
 │       ├── 011_tong-ket-phien-thong-bao-tien-do-va-linh-vat-dui.md # Tổng hợp toàn bộ đợt nâng cấp 008 -> 010 & lỗi đã sửa
-│       └── 012_nap-tu-dien-fvdp-109k.md                 # Nhật ký nạp bộ FVDP 113.933 từ, DictionaryPackUpgrader & benchmark
+│       ├── 012_nap-tu-dien-fvdp-109k.md                 # Nhật ký nạp bộ FVDP 113.933 từ, DictionaryPackUpgrader & benchmark
+│       ├── 013_focus-app-lock-va-mo-khan-cap.md         # Nhật ký Focus App Lock, AppBlockerService, BlockedAppActivity & Room v4
+│       └── 014_fix-gemini-404-va-live-speaking.md       # Nhật ký sửa lỗi Gemini HTTP 404, Model Discovery & Live Speaking fallback
 ├── scripts/
 │   ├── build_dictionary_db.py           # Parse FVDP 109K / Wiktionary JSONL / seed -> assets/dictionary.db
 │   ├── export_keystore_base64.ps1       # Xuất enzii-release.jks sang Base64 vào Clipboard cho GitHub Secrets
@@ -56,23 +58,23 @@ c:\O_D\app học tiếng anh\
 ├── start-emulator.bat                   # Mở nhanh máy ảo Android 14 (Enzii_Pixel_API34)
 └── app/src/
     ├── main/
-    │   ├── AndroidManifest.xml          # MainActivity + QuickLookupActivity (ACTION_PROCESS_TEXT)
-    │   ├── assets/dictionary.db         # Pre-packaged SQLite DB (113.933 từ + 5 bài đọc + 7 thẻ mẫu, 32.05 MB)
+    │   ├── AndroidManifest.xml          # MainActivity + QuickLookupActivity + BlockedAppActivity + AppBlockerService
+    │   ├── assets/dictionary.db         # Pre-packaged SQLite DB v4 (113.933 từ + 5 bài đọc + 7 thẻ mẫu + focus_lock_config, 32.06 MB)
     │   ├── res/                         # drawable-nodpi (7 WebP chú Dúi 85.6 KB) & Adaptive Icon (#0D9488 / #F59E0B)
     │   └── java/com/enziidict/app/
-    │       ├── MainActivity.kt          # EnziiSplashOverlay + DictionaryPackUpgrader + 5 tab đáy + Summary/Reading/Shadowing/Settings
+    │       ├── MainActivity.kt          # EnziiSplashOverlay + DictionaryPackUpgrader + đồng bộ Focus Lock + 5 tab đáy + các màn phụ
     │       ├── ui/
     │       │   ├── theme/               # Color.kt, Type.kt, Theme.kt (Light & Dark Mode)
     │       │   └── components/          # BentoCard, DuiMascotView (MascotMood/MascotLevel), PosPill, CefrPill, IpaAudioPill, EnziiHaptics
-    │       ├── data/local/              # EnziiDatabase (v3), EnziiDatabaseMigrations (1->2->3), DatabaseModule, entity/ & dao/
+    │       ├── data/local/              # EnziiDatabase (v4), EnziiDatabaseMigrations (1->2->3->4), DatabaseModule, entity/ & dao/
     │       ├── core/
     │       │   ├── model/               # Dictionary, SRS, Speaking, Grammar, Reading models
-    │       │   ├── database/            # DictionaryRepository, DictionaryPackUpgrader & LearningProgressRepository
+    │       │   ├── database/            # DictionaryRepository, DictionaryPackUpgrader, LearningProgressRepository & FocusLockRepository
     │       │   ├── audio/               # TtsManager, OnlineAudioPlayer, LiveAudioManager, ShadowingAudioController, ShadowingSpeechRecognizer, PronunciationScorer
-    │       │   ├── network/             # SecureApiKeyStore, SettingsDataStore, OfflineMlKitTranslator, OnlineDictionaryRepository, AppUpdateManager, GeminiGrammarService, GeminiLiveClient, SpeakingEvaluationService, GeminiShadowingCoachService
-    │       │   └── notification/        # EnziiNotificationHelper, StudyNotificationScheduler, DailyStudyReminderWorker, DailyWordNotificationWorker
+    │       │   ├── network/             # SecureApiKeyStore, SettingsDataStore, GeminiModelCatalogService, GeminiSpeakingTurnService, OfflineMlKitTranslator, OnlineDictionaryRepository, AppUpdateManager, GeminiGrammarService, GeminiLiveClient, SpeakingEvaluationService, GeminiShadowingCoachService
+    │       │   └── notification/        # EnziiNotificationHelper (Daily, Word, Focus Lock), StudyNotificationScheduler, DailyStudyReminderWorker, DailyWordNotificationWorker
     │       └── feature/
-    │           ├── home/                # HomeScreen (Tooltip chú Dúi, Streak Hero + Dúi HAPPY/SLEEPY, 3 Daily Quests, SRS due)
+    │           ├── home/                # HomeScreen (Tooltip chú Dúi, Streak Hero + Dúi HAPPY/SLEEPY, 3 Daily Quests, SRS due, lối vào Shadowing & Focus App Lock)
     │           ├── progress/            # LearningSummaryScreen, LearningSummaryViewModel & SessionRecapComponents (Recap Flashcard/Speaking)
     │           ├── dictionary/          # DictionaryScreen (113.933 từ offline + Online, gợi ý chú Dúi INQUISITIVE)
     │           ├── quicklookup/         # QuickLookupActivity (popup nổi ACTION_PROCESS_TEXT)
@@ -81,8 +83,9 @@ c:\O_D\app học tiếng anh\
     │           ├── translate/           # TranslateScreen (Tầng 1 ML Kit Offline + Tầng 2 Gemini Grammar Breakdown)
     │           ├── speaking/            # SpeakingScreen (Dúi theo cấp độ BEGINNER/INTERMEDIATE/ADVANCED + FOCUSED khi gọi, Live PCM + AEC) & SpeakingHistoryScreen
     │           ├── shadowing/           # ShadowingScreen (Dúi FOCUSED/HAPPY/INQUISITIVE, chunks, 0.75x–1.15x, loop, ghi âm đối chiếu, AI stress/linking)
-    │           └── settings/            # SettingsScreen (BYOK API Key AES-256, model Gemini, Theme, gói offline ML Kit, thông báo WorkManager)
-    └── test/java/com/enziidict/app/     # 15 bộ test (45 test cases) — 100% PASS
+    │           ├── focuslock/           # FocusLockScreen, FocusLockViewModel, FocusLockPermissions, AppBlockerService & BlockedAppActivity
+    │           └── settings/            # SettingsScreen (BYOK API Key AES-256, model Gemini, Theme, gói offline ML Kit, thông báo WorkManager, lối vào Focus App Lock)
+    └── test/java/com/enziidict/app/     # 17 bộ test (52 test cases) — 100% PASS
 ```
 
 ---
@@ -105,13 +108,14 @@ c:\O_D\app học tiếng anh\
 - [x] **Cấu hình Release APK, Keystore, R8/ProGuard & ABI `arm64-v8a`**: `.gitignore` bảo mật secret, `keystore.properties.example`, `app/build.gradle.kts` (`isMinifyEnabled = true`, `isShrinkResources = true`, `abiFilters = ["arm64-v8a"]`), `app/proguard-rules.pro` cho Room/Hilt/ML Kit/Kotlinx Serialization/Tink; `assembleRelease` thành công.
 - [x] **Tự động Cập nhật Trong App (GitHub Releases) & CI/CD Signed Release**: `AppUpdateManager` + `FileProvider` + thẻ cập nhật trong `SettingsScreen` + badge `MainActivity` + workflow `.github/workflows/release-apk.yml` tự tăng `versionCode` và ký bằng `enzii-release.jks` qua GitHub Secrets.
 - [x] **Thông báo Học tập Thông minh (`core/notification`, `WorkManager`)**: Xin quyền `POST_NOTIFICATIONS` trên Android 13+, nhắc học giữ Streak (`DailyStudyReminderWorker` với `TimePickerDialog`), thông báo Từ vựng / Mẫu câu mỗi ngày (`DailyWordNotificationWorker` 1–2 lần/ngày, `BigTextStyle`) kèm nút hành động & Deep Link mở thẳng Từ điển/Flashcard/Shadowing.
+- [x] **Focus App Lock & Mở khẩn cấp (`feature/focuslock`, Room v4)**: Cấu hình mục tiêu phút học & số từ/lượt học (`requireBoth` hoặc đạt 1 trong 2), danh sách app cài đặt lấy từ `PackageManager` có tìm kiếm, `AppBlockerService` kiểm tra `PACKAGE_USAGE_STATS` gọn nhẹ và tự dừng khi tắt, `BlockedAppActivity` hiển thị chú Dúi + tiến độ học + nút **"Học ngay để mở khóa"** + **"Mở khẩn cấp"** giới hạn lượt/ngày và tự reset khi qua ngày mới.
+- [x] **Tự động Đồng bộ Model Gemini & Sửa Live Speaking (`GeminiModelCatalogService`, `GeminiSpeakingTurnService`, `GeminiLiveClient`)**: Truy vấn `/v1beta/models` kiểm tra Key & tải model khả dụng ngay trong Cài đặt, tự phục hồi HTTP 404 trên toàn bộ dịch vụ REST, hỗ trợ binary frame (`ByteString`) + `setupComplete` gate cho WebSocket và fallback **AI Giọng nói (STT + Gemini + TTS)** mượt mà trên mọi tài khoản/API Key.
 
 ### Bước Tiếp Theo Cần Làm Khi Mở Lại Dự Án (Thứ tự Ưu tiên)
-1. **Kiểm thử thủ công trên máy ảo `Enzii_Pixel_API34` (`emulator-5554`)**:
-   - Đã cài bản Debug mới nhất (`98,801,029` bytes); kiểm tra Adaptive Icon, Splash chú Dúi, kho `113.933` từ (bao gồm tự động nâng cấp dữ liệu giữ nguyên Sổ tay), **Home / Daily Quests / Streak / Tổng kết học tập**, và **Cài đặt → Nhắc nhở & Từ vựng mỗi ngày**.
-2. **Đẩy mã nguồn lên GitHub & phát hành bản cập nhật OTA cho điện thoại thật**:
-   - Chỉ thực hiện sau khi bạn xác nhận đã test ổn trên máy ảo: `git commit` toàn bộ thay đổi local (từ phiên 008 → 012), `git push origin main` và tạo tag Release (`v*`) để GitHub Actions build + ký APK cho điện thoại thật tự tải về qua In-App Update.
-3. **Mở rộng Lịch sử tra cứu & Lịch sử dịch**:
+1. **Cập nhật OTA bản `v0.4.0` lên điện thoại thật & kiểm thử thực tế**:
+   - Đợi GitHub Actions hoàn tất build bản ký số `v0.4.0`, sau đó mở Enzii Dict → **Cài đặt → Kiểm tra & Cập nhật trong App** để tải về.
+   - Kiểm tra nút **"Kiểm tra & Tải model"** ở Cài đặt, **Dịch → Phân tích ngữ pháp**, **Nói AI** và **Khóa App Tập Trung** trên thiết bị thật.
+2. **Mở rộng Lịch sử tra cứu & Lịch sử dịch**:
    - Lưu lịch sử tra từ và lịch sử dịch xuống Room để xem lại offline nhanh từ tab Từ điển / Dịch.
 
 ---

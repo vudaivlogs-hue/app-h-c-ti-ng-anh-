@@ -69,6 +69,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.enziidict.app.core.network.AppThemeMode
 import com.enziidict.app.core.network.DailyWordSource
+import com.enziidict.app.core.network.GeminiModelCatalogService
 import com.enziidict.app.core.network.GeminiModelPresets
 import com.enziidict.app.core.network.UpdateDownloadState
 import com.enziidict.app.core.notification.EnziiNotificationHelper
@@ -78,6 +79,7 @@ import java.util.Locale
 @Composable
 fun SettingsScreen(
     onBack: () -> Unit,
+    onOpenFocusLock: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -502,17 +504,60 @@ fun SettingsScreen(
                     ) {
                         Button(
                             onClick = { viewModel.saveApiKey(keyDraft) },
+                            enabled = !state.isVerifyingKey,
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text("Lưu API Key")
+                            Text("Lưu Key")
+                        }
+                        FilledTonalButton(
+                            onClick = { viewModel.verifyApiKeyAndRefreshModels(keyDraft) },
+                            enabled = !state.isVerifyingKey
+                        ) {
+                            if (state.isVerifyingKey) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Đang kiểm tra...")
+                            } else {
+                                Text("Kiểm tra & Tải model")
+                            }
                         }
                         if (state.apiKey.isNotEmpty()) {
-                            OutlinedButton(onClick = {
-                                keyDraft = ""
-                                viewModel.clearApiKey()
-                            }) {
+                            OutlinedButton(
+                                onClick = {
+                                    keyDraft = ""
+                                    viewModel.clearApiKey()
+                                },
+                                enabled = !state.isVerifyingKey
+                            ) {
                                 Text("Xóa")
                             }
+                        }
+                    }
+
+                    state.keyVerificationMessage?.let { verifyMsg ->
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (state.keyVerificationIsError) {
+                                    MaterialTheme.colorScheme.errorContainer
+                                } else {
+                                    MaterialTheme.colorScheme.secondaryContainer
+                                }
+                            )
+                        ) {
+                            Text(
+                                text = verifyMsg,
+                                modifier = Modifier.padding(10.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (state.keyVerificationIsError) {
+                                    MaterialTheme.colorScheme.onErrorContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                }
+                            )
                         }
                     }
                 }
@@ -525,38 +570,116 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Model Gemini mặc định",
+                        text = if (state.discoveredTextModels.isNotEmpty()) {
+                            "Model Gemini khả dụng (Đã đồng bộ từ Key)"
+                        } else {
+                            "Model Gemini mặc định"
+                        },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     Text(
-                        text = "Dùng cho Phân tích ngữ pháp & sắc thái từ ở màn hình Dịch thuật.",
+                        text = "Dùng cho Phân tích ngữ pháp, Từ điển Online, Shadowing AI Coach và chấm điểm Speaking.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    GeminiModelPresets.ALL.forEach { (modelId, desc) ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { viewModel.selectGeminiModel(modelId) }
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = state.selectedModel == modelId,
-                                onClick = { viewModel.selectGeminiModel(modelId) }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Column {
-                                Text(modelId, fontWeight = FontWeight.SemiBold)
-                                Text(
-                                    text = desc,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    if (state.discoveredTextModels.isNotEmpty()) {
+                        state.discoveredTextModels.take(8).forEachIndexed { idx, modelId ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { viewModel.selectGeminiModel(modelId) }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = state.selectedModel == modelId,
+                                    onClick = { viewModel.selectGeminiModel(modelId) }
                                 )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(modelId, fontWeight = FontWeight.SemiBold)
+                                    if (idx == 0) {
+                                        Text(
+                                            text = "Gợi ý tốt nhất cho API Key hiện tại",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
                             }
                         }
+                    } else {
+                        GeminiModelPresets.ALL.forEach { (modelId, desc) ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { viewModel.selectGeminiModel(modelId) }
+                                    .padding(vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = state.selectedModel == modelId,
+                                    onClick = { viewModel.selectGeminiModel(modelId) }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(modelId, fontWeight = FontWeight.SemiBold)
+                                    Text(
+                                        text = desc,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                    Text(
+                        text = "Model Luyện nói AI (Gemini Live Audio)",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (state.discoveredLiveModels.isNotEmpty()) {
+                        state.discoveredLiveModels.take(4).forEachIndexed { idx, fullModelName ->
+                            val shortId = GeminiModelCatalogService.normalizeModelId(fullModelName)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { viewModel.selectGeminiLiveModel(fullModelName) }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = state.selectedLiveModel == fullModelName,
+                                    onClick = { viewModel.selectGeminiLiveModel(fullModelName) }
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(shortId, fontWeight = FontWeight.SemiBold)
+                                    if (idx == 0) {
+                                        Text(
+                                            text = "Live Native Audio khuyên dùng",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Text(
+                            text = if (state.discoveredTextModels.isNotEmpty()) {
+                                "API Key của bạn chưa bật model Live Audio WebSocket. Tab Nói AI sẽ tự động dùng chế độ Trò chuyện Giọng nói thông minh (STT + Gemini + TTS)."
+                            } else {
+                                "Mặc định: ${GeminiModelCatalogService.normalizeModelId(state.selectedLiveModel)} (Bấm \"Kiểm tra & Tải model\" sau khi lưu Key để đồng bộ chính xác)."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
@@ -748,6 +871,41 @@ fun SettingsScreen(
                                 Text("Tải bản mới")
                             }
                         }
+                    }
+                }
+            }
+
+            // 6. Focus App Lock Shortcut
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Focus App Lock (Khóa ứng dụng)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Text(
+                        text = "Tạm khóa app giải trí cho tới khi đạt mục tiêu học trong ngày; hỗ trợ mở khẩn cấp có giới hạn.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Button(
+                        onClick = onOpenFocusLock,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Lock, contentDescription = null)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Thiết lập Focus App Lock")
                     }
                 }
             }

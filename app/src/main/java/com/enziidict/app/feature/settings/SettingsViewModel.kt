@@ -8,7 +8,9 @@ import com.enziidict.app.core.network.AppReleaseInfo
 import com.enziidict.app.core.network.AppThemeMode
 import com.enziidict.app.core.network.AppUpdateManager
 import com.enziidict.app.core.network.DailyWordSource
+import com.enziidict.app.core.network.GeminiModelCatalogService
 import com.enziidict.app.core.network.GeminiModelPresets
+import com.enziidict.app.core.network.ModelDiscoveryOutcome
 import com.enziidict.app.core.network.OfflineMlKitTranslator
 import com.enziidict.app.core.network.SecureApiKeyStore
 import com.enziidict.app.core.network.SettingsDataStore
@@ -33,6 +35,12 @@ data class SettingsUiState(
     val apiKey: String = "",
     val isEncryptedStorage: Boolean = true,
     val selectedModel: String = GeminiModelPresets.FLASH_25,
+    val selectedLiveModel: String = GeminiModelPresets.DEFAULT_LIVE_MODEL,
+    val discoveredTextModels: List<String> = emptyList(),
+    val discoveredLiveModels: List<String> = emptyList(),
+    val isVerifyingKey: Boolean = false,
+    val keyVerificationMessage: String? = null,
+    val keyVerificationIsError: Boolean = false,
     val themeMode: AppThemeMode = AppThemeMode.SYSTEM,
     val isMlKitPackDownloaded: Boolean = false,
     val isMlKitBusy: Boolean = false,
@@ -56,6 +64,7 @@ data class SettingsUiState(
 class SettingsViewModel @Inject constructor(
     private val secureApiKeyStore: SecureApiKeyStore,
     private val settingsDataStore: SettingsDataStore,
+    private val geminiModelCatalogService: GeminiModelCatalogService,
     private val mlKitTranslator: OfflineMlKitTranslator,
     private val appUpdateManager: AppUpdateManager,
     private val notificationScheduler: StudyNotificationScheduler
@@ -71,6 +80,24 @@ class SettingsViewModel @Inject constructor(
     private val updateStatusTextFlow = MutableStateFlow<String?>(null)
     private val downloadStateFlow = MutableStateFlow<UpdateDownloadState>(UpdateDownloadState.Idle)
 
+    private val isVerifyingKeyFlow = MutableStateFlow(false)
+    private val keyVerificationMessageFlow = MutableStateFlow<String?>(null)
+    private val keyVerificationIsErrorFlow = MutableStateFlow(false)
+
+    private data class KeyVerifySnapshot(
+        val isVerifying: Boolean,
+        val message: String?,
+        val isError: Boolean
+    )
+
+    private val keyVerifyFlow = combine(
+        isVerifyingKeyFlow,
+        keyVerificationMessageFlow,
+        keyVerificationIsErrorFlow
+    ) { verifying, msg, err ->
+        KeyVerifySnapshot(verifying, msg, err)
+    }
+
     val uiState: StateFlow<SettingsUiState> = combine(
         secureApiKeyStore.apiKeyFlow,
         settingsDataStore.settingsFlow,
@@ -81,7 +108,8 @@ class SettingsViewModel @Inject constructor(
         checkingUpdateFlow,
         availableReleaseFlow,
         updateStatusTextFlow,
-        downloadStateFlow
+        downloadStateFlow,
+        keyVerifyFlow
     ) { values ->
         val apiKey = values[0] as String
         val settings = values[1] as UserSettings
@@ -93,11 +121,18 @@ class SettingsViewModel @Inject constructor(
         val release = values[7] as AppReleaseInfo?
         val updateText = values[8] as String?
         val downloadState = values[9] as UpdateDownloadState
+        val keyVerify = values[10] as KeyVerifySnapshot
 
         SettingsUiState(
             apiKey = apiKey,
             isEncryptedStorage = secureApiKeyStore.isEncryptedStorage,
             selectedModel = settings.geminiModel,
+            selectedLiveModel = settings.geminiLiveModel,
+            discoveredTextModels = settings.discoveredTextModels,
+            discoveredLiveModels = settings.discoveredLiveModels,
+            isVerifyingKey = keyVerify.isVerifying,
+            keyVerificationMessage = keyVerify.message,
+            keyVerificationIsError = keyVerify.isError,
             themeMode = settings.themeMode,
             isMlKitPackDownloaded = downloaded,
             isMlKitBusy = busy,
@@ -256,26 +291,112 @@ class SettingsViewModel @Inject constructor(
         val cleaned = rawKey.trim()
         secureApiKeyStore.saveApiKey(cleaned)
         errorMessageFlow.value = null
-        statusMessageFlow.value = if (cleaned.isNotEmpty()) {
-            "Đã mã hóa và lưu Gemini API Key an toàn trên thiết bị."
+        if (cleaned.isNotEmpty()) {
+            statusMessageFlow.value = "Đã mã hóa và lưu Gemini API Key — đang kiểm tra danh sách model khả dụng..."
+            verifyApiKeyAndRefreshModels(cleaned)
         } else {
-            "Đã xóa Gemini API Key."
+            keyVerificationMessageFlow.value = null
+            keyVerificationIsErrorFlow.value = false
+            viewModelScope.launch {
+                settingsDataStore.saveDiscoveredModels(emptyList(), emptyList())
+            }
+            statusMessageFlow.value = "Đã xóa Gemini API Key."
         }
     }
 
     fun clearApiKey() {
         secureApiKeyStore.clearApiKey()
         errorMessageFlow.value = null
+        keyVerificationMessageFlow.value = null
+        keyVerificationIsErrorFlow.value = false
+        viewModelScope.launch {
+            settingsDataStore.saveDiscoveredModels(emptyList(), emptyList())
+        }
         statusMessageFlow.value = "Đã xóa Gemini API Key khỏi thiết bị."
     }
 
+    fun verifyApiKeyAndRefreshModels(overrideKey: String? = null) {
+        if (isVerifyingKeyFlow.value) return
+        val keyToCheck = (overrideKey ?: secureApiKeyStore.getApiKey()).trim()
+        if (keyToCheck.isEmpty()) {
+            keyVerificationIsErrorFlow.value = true
+            keyVerificationMessageFlow.value = "Vui lòng nhập hoặc dán Gemini API Key trước khi kiểm tra."
+            return
+        }
+
+        viewModelScope.launch {
+            isVerifyingKeyFlow.value = true
+            keyVerificationIsErrorFlow.value = false
+            keyVerificationMessageFlow.value = "Đang kiểm tra API Key với máy chủ Google..."
+
+            when (val outcome = geminiModelCatalogService.discoverModels(keyToCheck, forceRefresh = true)) {
+                is ModelDiscoveryOutcome.Success -> {
+                    val catalog = outcome.catalog
+                    val textIds = catalog.textModels.map { it.id }
+                    val liveFullNames = catalog.liveAudioModels.map { it.fullName }
+                    settingsDataStore.saveDiscoveredModels(textIds, liveFullNames)
+
+                    val currentSettings = settingsDataStore.settingsFlow.first()
+                    val currentTextId = GeminiModelCatalogService.normalizeModelId(currentSettings.geminiModel)
+                    var activeTextModel = currentTextId
+                    if (textIds.isNotEmpty() && !textIds.contains(currentTextId)) {
+                        val recommended = catalog.recommendedTextModel ?: textIds.first()
+                        settingsDataStore.saveGeminiModel(recommended)
+                        activeTextModel = recommended
+                    }
+
+                    val currentLiveName = GeminiModelCatalogService.normalizeFullModelName(currentSettings.geminiLiveModel)
+                    var activeLiveModel = currentLiveName
+                    if (liveFullNames.isNotEmpty() && !liveFullNames.contains(currentLiveName)) {
+                        val recommendedLive = catalog.recommendedLiveModel ?: liveFullNames.first()
+                        settingsDataStore.saveGeminiLiveModel(recommendedLive)
+                        activeLiveModel = recommendedLive
+                    }
+
+                    keyVerificationIsErrorFlow.value = false
+                    val liveSummary = if (liveFullNames.isNotEmpty()) {
+                        "${liveFullNames.size} model Live Audio (đang chọn: ${GeminiModelCatalogService.normalizeModelId(activeLiveModel)})"
+                    } else {
+                        "0 model Live Audio (app tự dùng chế độ AI Giọng nói STT + TTS)"
+                    }
+                    keyVerificationMessageFlow.value =
+                        "Key hợp lệ! Tìm thấy ${textIds.size} model văn bản (đang chọn: $activeTextModel) và $liveSummary."
+                    statusMessageFlow.value = "Đã đồng bộ ${textIds.size} model Gemini từ API Key của bạn."
+                }
+                ModelDiscoveryOutcome.MissingApiKey -> {
+                    keyVerificationIsErrorFlow.value = true
+                    keyVerificationMessageFlow.value = "Chưa có Gemini API Key."
+                }
+                is ModelDiscoveryOutcome.NetworkError -> {
+                    keyVerificationIsErrorFlow.value = true
+                    keyVerificationMessageFlow.value = outcome.messageVi
+                }
+                is ModelDiscoveryOutcome.ApiError -> {
+                    keyVerificationIsErrorFlow.value = true
+                    keyVerificationMessageFlow.value = outcome.messageVi
+                }
+            }
+            isVerifyingKeyFlow.value = false
+        }
+    }
+
     fun selectGeminiModel(model: String) {
-        val cleaned = model.trim()
+        val cleaned = GeminiModelCatalogService.normalizeModelId(model)
         if (cleaned.isEmpty()) return
         viewModelScope.launch {
             settingsDataStore.saveGeminiModel(cleaned)
             errorMessageFlow.value = null
             statusMessageFlow.value = "Đã đặt model mặc định: $cleaned"
+        }
+    }
+
+    fun selectGeminiLiveModel(model: String) {
+        val cleaned = GeminiModelCatalogService.normalizeFullModelName(model)
+        if (cleaned.isEmpty()) return
+        viewModelScope.launch {
+            settingsDataStore.saveGeminiLiveModel(cleaned)
+            errorMessageFlow.value = null
+            statusMessageFlow.value = "Đã đặt model Luyện nói Live: ${GeminiModelCatalogService.normalizeModelId(cleaned)}"
         }
     }
 

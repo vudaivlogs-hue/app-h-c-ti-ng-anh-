@@ -181,6 +181,27 @@ CREATE TABLE user_streak_state (
     daily_xp_goal INTEGER NOT NULL,
     PRIMARY KEY(id)
 );
+
+CREATE TABLE focus_lock_config (
+    id INTEGER NOT NULL,
+    is_enabled INTEGER NOT NULL,
+    required_study_minutes INTEGER NOT NULL,
+    required_knowledge_count INTEGER NOT NULL,
+    require_both INTEGER NOT NULL,
+    emergency_unlock_duration_minutes INTEGER NOT NULL,
+    max_emergency_unlocks_per_day INTEGER NOT NULL,
+    emergency_unlocked_until_millis INTEGER NOT NULL,
+    emergency_used_count_today INTEGER NOT NULL,
+    emergency_usage_date TEXT NOT NULL,
+    PRIMARY KEY(id)
+);
+
+CREATE TABLE locked_apps (
+    package_name TEXT NOT NULL,
+    app_label TEXT NOT NULL,
+    added_at INTEGER NOT NULL,
+    PRIMARY KEY(package_name)
+);
 """
 
 # ~460+ common English words (paired with 40 curated entries -> ~500 total entries)
@@ -1567,6 +1588,16 @@ def build_database(fvdp_path: Path | None, wiktionary_path: Path | None, use_def
             INSERT OR IGNORE INTO user_streak_state (
                 id, current_streak, longest_streak, freeze_count, last_active_date, daily_xp_goal
             ) VALUES (1, 0, 0, 1, NULL, 50)
+            """
+        )
+
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO focus_lock_config (
+                id, is_enabled, required_study_minutes, required_knowledge_count,
+                require_both, emergency_unlock_duration_minutes, max_emergency_unlocks_per_day,
+                emergency_unlocked_until_millis, emergency_used_count_today, emergency_usage_date
+            ) VALUES (1, 0, 20, 10, 0, 5, 2, 0, 0, '')
             """
         )
 

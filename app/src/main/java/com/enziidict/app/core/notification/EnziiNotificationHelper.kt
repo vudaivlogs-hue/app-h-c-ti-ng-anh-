@@ -37,9 +37,11 @@ object EnziiNotificationHelper {
 
     const val CHANNEL_DAILY_REMINDER = "enzii_daily_reminder"
     const val CHANNEL_DAILY_WORD = "enzii_daily_word"
+    const val CHANNEL_FOCUS_LOCK = "enzii_focus_lock"
 
     const val NOTIF_ID_REMINDER = 1001
     const val NOTIF_ID_WORD = 1002
+    const val NOTIF_ID_FOCUS_LOCK = 1003
 
     const val EXTRA_DEST = "enzii_notif_dest"
     const val EXTRA_WORD = "enzii_notif_word"
@@ -69,8 +71,17 @@ object EnziiNotificationHelper {
             description = "Gợi ý 1 từ vựng (kèm IPA & nghĩa) hoặc mẫu câu giao tiếp hằng ngày."
         }
 
+        val focusLockChannel = NotificationChannel(
+            CHANNEL_FOCUS_LOCK,
+            "Focus App Lock",
+            NotificationManager.IMPORTANCE_LOW
+        ).apply {
+            description = "Duy trì giám sát mục tiêu học tập trước khi mở các ứng dụng đã khóa."
+        }
+
         manager.createNotificationChannel(reminderChannel)
         manager.createNotificationChannel(wordChannel)
+        manager.createNotificationChannel(focusLockChannel)
     }
 
     fun hasNotificationPermission(context: Context): Boolean {

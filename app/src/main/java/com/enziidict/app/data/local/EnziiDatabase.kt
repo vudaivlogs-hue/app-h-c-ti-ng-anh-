@@ -3,6 +3,7 @@ package com.enziidict.app.data.local
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.enziidict.app.data.local.dao.DictionaryDao
+import com.enziidict.app.data.local.dao.FocusLockDao
 import com.enziidict.app.data.local.dao.ReadingDao
 import com.enziidict.app.data.local.dao.SavedWordDao
 import com.enziidict.app.data.local.dao.SpeakingDao
@@ -12,6 +13,8 @@ import com.enziidict.app.data.local.entity.BilingualArticle
 import com.enziidict.app.data.local.entity.DailyStudyLog
 import com.enziidict.app.data.local.entity.DictionaryEntry
 import com.enziidict.app.data.local.entity.DictionaryFts
+import com.enziidict.app.data.local.entity.FocusLockConfig
+import com.enziidict.app.data.local.entity.LockedAppEntity
 import com.enziidict.app.data.local.entity.SavedWord
 import com.enziidict.app.data.local.entity.SpeakingMessage
 import com.enziidict.app.data.local.entity.SpeakingSession
@@ -28,9 +31,11 @@ import com.enziidict.app.data.local.entity.WordFolder
         SpeakingMessage::class,
         BilingualArticle::class,
         DailyStudyLog::class,
-        UserStreakState::class
+        UserStreakState::class,
+        FocusLockConfig::class,
+        LockedAppEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true
 )
 abstract class EnziiDatabase : RoomDatabase() {
@@ -40,4 +45,5 @@ abstract class EnziiDatabase : RoomDatabase() {
     abstract fun speakingDao(): SpeakingDao
     abstract fun readingDao(): ReadingDao
     abstract fun studyProgressDao(): StudyProgressDao
+    abstract fun focusLockDao(): FocusLockDao
 }

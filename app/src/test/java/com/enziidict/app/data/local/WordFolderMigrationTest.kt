@@ -164,7 +164,8 @@ class WordFolderMigrationTest {
         val migratedDb = Room.databaseBuilder(context, EnziiDatabase::class.java, dbName)
             .addMigrations(
                 EnziiDatabaseMigrations.MIGRATION_1_2,
-                EnziiDatabaseMigrations.MIGRATION_2_3
+                EnziiDatabaseMigrations.MIGRATION_2_3,
+                EnziiDatabaseMigrations.MIGRATION_3_4
             )
             .allowMainThreadQueries()
             .build()
